@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Belay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14161a;--mute:#6b7280;--line:#e5e7eb;--acc:#2f5bea;--acc2:#e8eefd;--good:#14915f;--goodbg:#e3f5ec;--warn:#b45309;--warnbg:#fdf1e1;--bad:#c2410c}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#171a20;--ink:#eef0f3;--mute:#9aa1ad;--line:#2a2f38;--acc:#6d8cff;--acc2:#1d2540;--good:#3ccf8e;--goodbg:#12291f;--warn:#f5a524;--warnbg:#2c220f;--bad:#fb7a45}}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.45;padding-bottom:76px}
+header{padding:16px 16px 4px;max-width:860px;margin:0 auto}
+h1{font-size:20px;margin:0}
+.sub{color:var(--mute);font-size:13px}
+main{max-width:860px;margin:0 auto;padding:8px 12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:10px 0}
+.card h2{font-size:15px;margin:0 0 8px}
+.row{display:flex;gap:10px;align-items:center}
+.sp{justify-content:space-between}
+.wrap{flex-wrap:wrap}
+.muted{color:var(--mute);font-size:13px}
+.big{font-size:26px;font-weight:700}
+.pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;background:var(--acc2);color:var(--acc);font-weight:600}
+.pill.good{background:var(--goodbg);color:var(--good)}
+.pill.warn{background:var(--warnbg);color:var(--warn)}
+.bar{height:8px;background:var(--line);border-radius:99px;overflow:hidden;flex:1}
+.bar>i{display:block;height:100%;background:var(--acc);border-radius:99px}
+.bar.good>i{background:var(--good)}
+button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:8px 12px;cursor:pointer}
+button.pri{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+button.sm{padding:4px 9px;font-size:13px}
+button.ghost{border:none;background:none;color:var(--acc);padding:4px}
+nav{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:6px 4px calc(6px + env(safe-area-inset-bottom));z-index:5}
+nav button{border:none;background:none;font-size:11px;color:var(--mute);display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 6px}
+nav button b{font-size:19px;font-weight:400}
+nav button.on{color:var(--acc);font-weight:600}
+.item{padding:10px 0;border-bottom:1px solid var(--line)}
+.item:last-child{border-bottom:none}
+.dots{display:flex;gap:3px}
+.dots i{width:14px;height:14px;border-radius:4px;background:var(--line);cursor:pointer}
+.dots i.on{background:var(--acc)}
+.dots i.tg{outline:2px dashed var(--good);outline-offset:-2px}
+.cta{background:linear-gradient(135deg,var(--acc),#7c4dff);color:#fff;border:none}
+.cta .muted{color:#e6e9ff}
+.lock{opacity:.55}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:7px 5px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--mute);font-weight:500;cursor:pointer}
+tr.me{background:var(--acc2)}
+tr.click{cursor:pointer}
+.scroll{overflow-x:auto}
+input,select,textarea{font:inherit;width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink)}
+label{display:block;font-size:12px;color:var(--mute);margin:8px 0 3px}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-end;justify-content:center;z-index:10}
+#modal.on{display:flex}
+#modal .sheet{background:var(--card);width:100%;max-width:560px;border-radius:16px 16px 0 0;padding:16px;max-height:88vh;overflow:auto}
+.tag{display:inline-block;font-size:12px;padding:1px 7px;border:1px solid var(--line);border-radius:6px;margin:2px 3px 0 0}
+.tag.gap{border-color:var(--bad);color:var(--bad)}
+.tag.ok{border-color:var(--good);color:var(--good)}
+.star{cursor:pointer;font-size:17px;color:var(--mute)}
+.star.on{color:#f5a524}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.toast{position:fixed;top:12px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:10px;font-size:13px;display:none;z-index:20;max-width:92vw;text-align:center}
+.rank{margin-top:6px}
+.rank .row{gap:8px}
+.rank b{font-size:13px}
+.heat{display:grid;grid-template-columns:repeat(14,1fr);gap:3px;margin-top:6px}
+.heat i{aspect-ratio:1;border-radius:3px;background:var(--line)}
+.heat i.h{background:var(--acc)}
+.money{border-color:var(--warn);background:var(--warnbg)}
+.coachtxt{font-size:14px;line-height:1.55}
+.coachtxt b{color:var(--acc)}
+.toast.big{font-size:16px;padding:14px 18px;background:linear-gradient(135deg,#14915f,#2f5bea);color:#fff;font-weight:600}
+nav button{padding:4px 3px}
+</style>
+</head>
+<body>
+<header>
+  <div class="row sp"><h1>Belay</h1><span class="muted" id="saveState"></span></div>
+  <div id="rank"></div>
+</header>
+<main id="app"></main>
+<nav id="nav"></nav>
+<div id="modal"><div class="sheet" id="sheet"></div></div>
+<div class="toast" id="toast"></div>
+<script>
+// ---------- data ----------
+const LV=["None","Aware","Basic","Working","Strong","Expert"];
+const TIER=["","Entry","Mid","Senior","Lead / Principal","Manager / Head"];
+// [ISO, name, typical engineer gross USD/yr, effective tax+social % at that gross, single-person living cost USD/yr incl. rent, inflation %]
+const COUNTRIES=[["JP","Japan",36000,24,14600,2.1],["US","United States",95000,28,42000,2.9],["CA","Canada",71500,26,32000,3.2],["GB","United Kingdom",52000,25,33000,3.5],["IE","Ireland",58000,32,36000,1.8],["DE","Germany",84800,41,28000,2.6],["NL","Netherlands",69400,30,32000,3.5],["BE","Belgium",55000,42,28000,3.0],["LU","Luxembourg",75000,33,40000,2.0],["FR","France",50000,34,28000,1.5],["CH","Switzerland",105000,22,52000,0.6],["AT","Austria",55000,38,28000,3.2],["DK","Denmark",70000,42,35000,1.8],["SE","Sweden",50000,33,28000,1.5],["NO","Norway",65000,34,36000,3.0],["FI","Finland",48000,33,27000,1.5],["IT","Italy",38000,35,24000,1.5],["ES","Spain",36000,30,22000,2.8],["PT","Portugal",25000,28,18000,2.3],["GR","Greece",25000,28,17000,2.7],["PL","Poland",28000,26,15000,4.0],["CZ","Czechia",30000,25,16000,2.5],["SK","Slovakia",25000,26,14000,3.5],["HU","Hungary",22000,33,13000,4.5],["RO","Romania",20000,35,12000,5.5],["EE","Estonia",35000,22,17000,4.5],["TR","Turkey",18000,25,11000,35],["IL","Israel",60000,30,34000,3.0],["AE","UAE",47100,0,34000,1.6],["SA","Saudi Arabia",55000,0,24000,2.0],["QA","Qatar",60000,0,32000,1.5],["KW","Kuwait",50000,0,24000,3.0],["OM","Oman",45000,0,22000,1.0],["BH","Bahrain",40000,0,22000,1.0],["IN","India",10700,6,6700,5.5],["PK","Pakistan",7000,12,4500,7],["BD","Bangladesh",6000,10,4500,9],["LK","Sri Lanka",6000,12,5000,3],["NP","Nepal",5000,15,4000,5],["CN","China",28000,18,15000,0.5],["HK","Hong Kong",50000,12,38000,1.8],["TW","Taiwan",30000,10,15000,2.0],["KR","South Korea",45000,18,24000,2.2],["SG","Singapore",54100,5,36000,1.8],["MY","Malaysia",18000,12,10000,1.8],["TH","Thailand",15000,10,9500,1.0],["VN","Vietnam",12000,12,8000,3.5],["ID","Indonesia",11000,12,8000,2.0],["PH","Philippines",9000,15,7500,2.5],["AU","Australia",70000,26,36000,3.0],["NZ","New Zealand",55000,24,32000,2.5],["ZA","South Africa",30000,25,14000,4.0],["EG","Egypt",7000,18,5500,20],["MA","Morocco",12000,25,7500,1.5],["NG","Nigeria",8000,18,7000,25],["KE","Kenya",10000,25,8000,4.5],["MX","Mexico",18000,20,11000,4.0],["BR","Brazil",20000,25,12000,5.0],["AR","Argentina",15000,25,10000,40],["CL","Chile",25000,12,14000,4.0],["CO","Colombia",14000,15,9000,5.0],["PE","Peru",15000,15,9500,2.0],["KZ","Kazakhstan",15000,12,8000,10]];
+
+const STARTER_SKILLS=[["Creo Parametric","CAD",4],["Fixture & jig design","Design",4],["GD&T","Design",3],["Design for manufacturing","Design",3],["Robotics integration","Robotics",3],["Python","Software",3],["Web dev (JS)","Software",3],["Japanese (business)","Language",3],["FEA / CAE","Analysis",2],["Project management","Leadership",2],["PLC programming","Automation",1],["ROS 2","Robotics",1],["Machine learning","Software",1]];
+const STARTER_WANT=["Robotics integration","Python","ROS 2"];
+const STARTER_JOBS=[
+ ["Mechanical Design Engineer (Creo)",2,5500000,{"Creo Parametric":3,"GD&T":3,"Design for manufacturing":3,"Japanese (business)":3}],
+ ["Senior Mechanical Design Engineer",3,7500000,{"Creo Parametric":4,"GD&T":4,"Design for manufacturing":4,"FEA / CAE":3,"Project management":2,"Japanese (business)":3}],
+ ["Robotics Application Engineer",3,7500000,{"Robotics integration":4,"Python":3,"Fixture & jig design":3,"PLC programming":2}],
+ ["Production / Automation Engineer",3,7000000,{"Fixture & jig design":4,"PLC programming":3,"Robotics integration":3,"Design for manufacturing":3,"Project management":2}],
+ ["CAD Automation Engineer",3,8000000,{"Creo Parametric":4,"Python":4,"Web dev (JS)":3}],
+ ["Robotics Systems Engineer (ROS)",4,10000000,{"ROS 2":4,"Python":4,"Robotics integration":4,"Machine learning":2}],
+ ["Lead Mechanical Engineer",4,10000000,{"Creo Parametric":5,"GD&T":4,"FEA / CAE":3,"Project management":4,"Design for manufacturing":4,"Japanese (business)":4}],
+ ["Engineering Manager",5,13000000,{"Project management":5,"Japanese (business)":4,"Design for manufacturing":3,"Robotics integration":3}]
+];
+const uid=()=>Math.random().toString(36).slice(2,10);
+const today=()=>new Date().toISOString().slice(0,10);
+const blank=()=>({skills:[],work:[],jobs:[],log:[],settings:{gross:5500000,fx:157,weeklyGoal:300},cOver:{},cAI:{},coach:{}});
+let S=blank(), tab="home", sortC="surplus", loaded=false;
+
+// ---------- storage ----------
+let dbRef=null, saveTimer=null;
+function setSave(t){document.getElementById('saveState').textContent=t}
+function save(){
+  clearTimeout(saveTimer);setSave('Saving…');
+  saveTimer=setTimeout(async()=>{
+    const body=JSON.parse(JSON.stringify(S));
+    try{localStorage.setItem('careerClimb',JSON.stringify(body))}catch(e){}
+    if(dbRef){try{await dbRef.set(body);setSave('Saved ✓')}catch(e){setSave('Saved on this device')}}
+    else setSave('Saved on this device');
+  },700);
+}
+function normalize(d){const b=blank();d=d||{};return {...b,...d,settings:{...b.settings,...(d.settings||{})},cOver:d.cOver||{},cAI:d.cAI||{},coach:d.coach||{}}}
+async function boot(){
+  try{const l=localStorage.getItem('careerClimb');if(l){S=normalize(JSON.parse(l))}}catch(e){}
+  render();
+  try{
+    if(!window.claude||!claude.use)return;
+    const [db,user]=await Promise.all([claude.use("db"),claude.use("user")]);
+    if(!db||!user)return;
+    const id=await user.id(); if(!id)return;
+    dbRef=db.doc("data/users/"+id+"/career");
+    const snap=await dbRef.get();
+    if(snap.exists){S=normalize(JSON.parse(JSON.stringify(snap.data())));render();setSave('Synced ✓')}
+    else if(S.skills.length||S.jobs.length){save()}
+  }catch(e){}
+  initCoach();
+  if(S.costOK&&(!S.cost||Date.now()-S.cost.at>6*36e5))syncCost();
+}
+
+// ---------- logic ----------
+const lvl=n=>{const s=S.skills.find(x=>x.name.toLowerCase()===n.toLowerCase());return s?s.level:0};
+function match(job,over){
+  const req=Object.entries(job.req||{});if(!req.length)return {pct:0,gaps:[],have:[]};
+  let sum=0;const gaps=[],have=[];
+  for(const [n,r] of req){const m=over&&over[n]!=null?over[n]:lvl(n);sum+=Math.min(m/r,1);(m>=r?have:gaps).push({n,r,m})}
+  return {pct:sum/req.length,gaps,have};
+}
+function wantPct(job){const req=Object.keys(job.req||{});if(!req.length)return 0;const w=S.skills.filter(s=>s.want).map(s=>s.name.toLowerCase());return req.filter(n=>w.includes(n.toLowerCase())).length/req.length}
+const UNLOCK=0.8;
+function bestUnlocked(over){let b=null;for(const j of S.jobs){if(match(j,over).pct>=UNLOCK&&(!b||j.salary>b.salary))b=j}return b}
+function nextSkills(){
+  const names=new Set([...S.skills.map(s=>s.name),...S.jobs.flatMap(j=>Object.keys(j.req||{}))]);
+  const cur=bestUnlocked();const curSal=cur?cur.salary:0;const out=[];
+  for(const n of names){
+    const l=lvl(n);if(l>=5)continue;
+    const over={[n]:l+1};let gain=0,unlocks=[];
+    for(const j of S.jobs){const a=match(j).pct,b=match(j,over).pct;gain+=(b-a)*j.tier*(wantPct(j)+0.5);if(a<UNLOCK&&b>=UNLOCK)unlocks.push(j)}
+    const nb=bestUnlocked(over);const raise=nb&&nb.salary>curSal?nb.salary-curSal:0;
+    if(gain>0)out.push({n,l,gain:gain+unlocks.length*2+raise/1e6,unlocks,raise});
+  }
+  return out.sort((a,b)=>b.gain-a.gain).slice(0,3);
+}
+function streak(){
+  const days=new Set(S.log.map(l=>l.d));let c=0;const d=new Date();
+  if(!days.has(d.toISOString().slice(0,10)))d.setDate(d.getDate()-1);
+  while(days.has(d.toISOString().slice(0,10))){c++;d.setDate(d.getDate()-1)}
+  return c;
+}
+function weekMin(){const t=Date.now()-7*864e5;return S.log.filter(l=>new Date(l.d).getTime()>=t).reduce((a,l)=>a+l.m,0)}
+function lastPractice(n){const l=S.log.filter(x=>x.s===n).map(x=>x.d).sort().pop();return l}
+const yen=v=>'¥'+Math.round(v).toLocaleString();
+const man=v=>'¥'+(v/1e4).toLocaleString(undefined,{maximumFractionDigits:0})+'万';
+const flag=c=>c.replace(/./g,ch=>String.fromCodePoint(127397+ch.charCodeAt()));
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// ---------- country model ----------
+const ALL='AF AL DZ AD AO AG AR AM AU AT AZ BS BH BD BB BY BE BZ BJ BT BO BA BW BR BN BG BF BI CV KH CM CA CF TD CL CN CO KM CG CD CR CI HR CU CY CZ DK DJ DM DO EC EG SV GQ ER EE SZ ET FJ FI FR GA GM GE DE GH GR GD GT GN GW GY HT HN HU IS IN ID IR IQ IE IL IT JM JP JO KZ KE KI KP KR KW KG LA LV LB LS LR LY LI LT LU MG MW MY MV ML MT MH MR MU MX FM MD MC MN ME MA MZ MM NA NR NP NL NZ NI NE NG MK NO OM PK PW PS PA PG PY PE PH PL PT QA RO RU RW KN LC VC WS SM ST SA SN RS SC SL SG SK SI SB SO ZA SS ES LK SD SR SE CH SY TJ TZ TH TL TG TO TT TN TR TM TV UG UA AE GB US UY UZ VU VA VE VN YE ZM ZW HK TW MO XK'.split(' ');
+let DN=null;try{DN=new Intl.DisplayNames(['en'],{type:'region'})}catch(e){}
+const cname=c=>{try{return DN?DN.of(c):c}catch(e){return c}};
+function allBase(){const have=new Set(COUNTRIES.map(x=>x[0]));return [...COUNTRIES,...Object.entries(S.cAI||{}).filter(([c])=>!have.has(c)).map(([c,v])=>[c,cname(c),v.g,v.t,v.l,v.i,true])]}
+function missingC(){const have=new Set(allBase().map(x=>x[0]));return ALL.filter(c=>!have.has(c))}
+function countryRows(){
+  const fx=S.settings.fx||150, myUSD=(S.settings.gross||0)/fx;
+  const C=allBase().map(([c,n,g,t,l,i,ai])=>{const o=S.cOver[c]||{};return {c,n,g:o.g??g,t:o.t??t,l:o.l??l,i:o.i??i,edited:!!S.cOver[c],ai:!!ai}});
+  const jp=C.find(x=>x.c==="JP");const mult=myUSD/jp.g;
+  const cs=S.settings.useCost!==false?costStats():null;
+  if(cs&&cs.avg>0){const mine=cs.avg*12/fx;const ratio=mine/jp.l;C.forEach(x=>{x.l=x.c==='JP'?mine:x.l*ratio;x.mine=true})}
+  const rows=C.map(x=>{
+    const gross=x.g*mult;
+    const tax=x.t===0?0:Math.min(55,Math.max(0,x.t*(1+0.25*Math.log(Math.max(mult,0.2)))));
+    const net=gross*(1-tax/100), surplus=net-x.l, real=surplus/(1+x.i/100);
+    return {...x,gross,tax,net,surplus,real,comfort:net/x.l};
+  });
+  const base=rows.find(r=>r.c==="JP");
+  rows.forEach(r=>r.vs=r.real-base.real);
+  const key={surplus:'real',gross:'gross',net:'net',comfort:'comfort',name:'n'}[sortC];
+  rows.sort((a,b)=>key==='n'?a.n.localeCompare(b.n):b[key]-a[key]);
+  return {rows,base,fx};
+}
+
+// ---------- gamification ----------
+const RANKS=[[0,'Apprentice'],[1000,'Technician'],[2500,'Engineer'],[5000,'Senior Engineer'],[9000,'Lead Engineer'],[15000,'Principal'],[25000,'Chief Engineer'],[40000,'Legend']];
+function xpInfo(){
+  const xp=S.log.reduce((a,l)=>a+(+l.m||0),0)+S.skills.reduce((a,s)=>a+s.level*s.level*40,0)+S.work.length*60;
+  let i=0;while(i<RANKS.length-1&&xp>=RANKS[i+1][0])i++;
+  const cur=RANKS[i],nx=RANKS[i+1];
+  return {xp,name:cur[1],next:nx?nx[1]:null,need:nx?nx[0]-xp:0,pct:nx?(xp-cur[0])/(nx[0]-cur[0]):1};
+}
+function renderRank(){
+  const x=xpInfo(),st=streak();
+  document.getElementById('rank').innerHTML=`<div class="rank"><div class="row"><b>${esc(x.name)}</b><span class="muted">${x.xp.toLocaleString()} XP</span><div class="bar"><i style="width:${Math.round(x.pct*100)}%"></i></div><span class="muted">${st}🔥</span></div><div class="muted" style="font-size:12px">${x.next?`${x.need.toLocaleString()} XP to <b>${esc(x.next)}</b> · 1 min practice = 1 XP · skill levels and work items give more`:'Top rank reached'}</div></div>`;
+}
+function heat(){let h='';for(let i=27;i>=0;i--){const d=new Date(Date.now()-i*864e5).toISOString().slice(0,10);const m=S.log.filter(l=>l.d===d).reduce((a,l)=>a+l.m,0);h+=`<i class="${m?'h':''}" title="${d}: ${m} min" style="${m?'opacity:'+(0.3+0.7*Math.min(1,m/60)):''}"></i>`}return `<div class="heat">${h}</div>`}
+function moneyGap(){
+  const cur=bestUnlocked();const cs=cur?cur.salary:0;
+  const cand=S.jobs.filter(j=>match(j).pct<UNLOCK&&j.salary>cs).sort((a,b)=>match(b).pct-match(a).pct||b.salary-a.salary)[0];
+  if(!cand)return null;return {job:cand,gap:cand.salary-cs,m:match(cand)};
+}
+const hrs=n=>Math.round(S.log.filter(l=>l.s===n).reduce((a,l)=>a+l.m,0)/6)/10;
+
+// ---------- coach (asks Claude) ----------
+let SAMPLE, busy={}, live={};
+async function getSample(){if(SAMPLE!==undefined)return SAMPLE;try{SAMPLE=(window.claude&&claude.use)?await claude.use('sample'):null}catch(e){SAMPLE=null}return SAMPLE}
+function initCoach(){getSample().then(s=>{if(tab==='coach'||tab==='home')render();if(s&&S.coachOK&&(!S.coach.daily||S.coach.daily.d!==today()))runCoach('daily')})}
+const PERSONA='You are a blunt, high-energy career coach inside a skill-tracking app. The user is a mechanical design engineer in Japan (Creo Parametric, fixture design, production engineering, robotics) who wants to climb to higher-level, better-paid jobs and is willing to work hard for it. Be specific and concrete: name exact exercises, mini-projects, certifications, books or courses. No generic advice, no fluff, no disclaimers. Push hard but stay realistic. Use the data below (skill levels are out of 5).';
+const PROMPTS={
+ daily:'Write TODAY\'S PUSH in markdown, under 110 words:\n**Do now (45 min):** one specific task for the highest-value skill to raise.\n**Quick win (10 min):** one small task for another wanted skill.\n**Why:** one sentence tying it to a specific locked job and its salary from the data.',
+ month:'Write a 4-week skill-up plan in markdown focused on the 1-2 skills that unlock the highest-paying jobs. For each week: a goal, 3 concrete tasks, and one proof-of-skill deliverable he can add to his work record. Under 280 words.',
+ review:'Review the last 14 days of practice honestly in markdown: what went well, what is being neglected (especially skills marked want:true), and one change for next week. Under 150 words.',
+ jobs:'Suggest 5 job profiles (in Japan or abroad) that heavily use the skills marked want:true, are a step up from his current fit, and are NOT already in the jobs list. Return ONLY a JSON array: [{"title":string,"tier":1-5 (1 entry,2 mid,3 senior,4 lead,5 manager),"salary":typical annual gross in Japanese yen as an integer,"req":{"Skill name":level 1-5} with 4-6 skills, reusing exact existing skill names where they match,"notes":"why it fits plus example companies"}]'
+};
+function ctx(){
+  const t=Date.now()-14*864e5,pr={};S.log.filter(l=>new Date(l.d).getTime()>=t).forEach(l=>pr[l.s]=(pr[l.s]||0)+l.m);
+  const cur=bestUnlocked();
+  return JSON.stringify({today:today(),currentJob:cur?cur.title:null,skills:S.skills.map(s=>({name:s.name,level:s.level,want:!!s.want,hoursLogged:hrs(s.name)})),jobs:S.jobs.map(j=>{const m=match(j);return {title:j.title,tier:TIER[j.tier],salaryYen:j.salary,fitPct:Math.round(m.pct*100),gaps:m.gaps.map(g=>g.n+' '+g.m+'->'+g.r)}}),topNextSkills:nextSkills().map(n=>n.n+' '+n.l+'->'+(n.l+1)),practiceMinutesLast14Days:pr,streakDays:streak(),minutesThisWeek:weekMin(),weeklyGoal:S.settings.weeklyGoal,recentWork:S.work.slice(-6).map(w=>w.title+(w.impact?' ('+w.impact+')':''))});
+}
+function md(t){return esc(t).split('\n').map(l=>{l=l.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/^#{1,4}\s*(.*)$/,'<b>$1</b>');if(/^\s*[-*]\s+/.test(l))l='• '+l.replace(/^\s*[-*]\s+/,'');return l}).join('<br>')}
+async function runCoach(mode){
+  if(busy[mode])return;const s=await getSample();
+  if(!s){toast('The coach works when this app is opened in Claude');return}
+  busy[mode]=true;live[mode]='';render();
+  const input=PERSONA+'\n\nTASK:\n'+PROMPTS[mode]+'\n\nDATA:\n'+ctx();
+  try{
+    if(mode==='jobs'){let v=await s.json(input);if(!Array.isArray(v))v=v&&(v.jobs||v.profiles)||[];S.coach.jobs={d:today(),list:v.filter(j=>j&&j.title)}}
+    else{const r=await s(input,{onText:({text})=>{live[mode]=text;const el=document.getElementById('co_'+mode);if(el)el.innerHTML=md(text)}});S.coach[mode]={d:today(),text:r.text}}
+    S.coachOK=true;save();
+  }catch(e){if(e&&e.code==='not_granted')SAMPLE=null;toast(e&&e.code==='rate_limited'?'Coach is busy, try again in a minute':'The coach could not answer this time')}
+  busy[mode]=false;render();
+}
+function coachBlock(mode,title,btn){
+  const c=S.coach[mode];const b=busy[mode];
+  return `<div class="card"><div class="row sp"><h2 style="margin:0">${title}</h2><button class="sm ${c?'':'pri'}" data-act="coach" data-m="${mode}" ${b?'disabled':''}>${b?'Thinking…':(c?'Refresh':btn)}</button></div>${c&&!b?`<div class="muted" style="font-size:12px">${c.d===today()?'Today':esc(c.d)}</div>`:''}<div class="coachtxt" id="co_${mode}" style="margin-top:6px">${b?md(live[mode]||'Thinking…'):(c&&c.text?md(c.text):'')}</div></div>`;
+}
+function vCoach(){
+  let h=`<div class="card cta"><div style="font-weight:700;font-size:17px">Your coach</div><div class="muted">Claude reads your skills, jobs and practice log and tells you exactly what to do next. Today's push refreshes by itself every day once you've used it once.</div></div>`;
+  if(SAMPLE===null)h+=`<div class="card muted">The coach needs this app opened inside Claude (claude.ai or the Claude app). Everything else works without it.</div>`;
+  h+=coachBlock('daily',"Today's push",'Get it');
+  h+=coachBlock('month','4-week plan','Make plan');
+  h+=coachBlock('review','Honest review of my last 2 weeks','Review me');
+  const J=S.coach.jobs;const bj=busy.jobs;
+  h+=`<div class="card"><div class="row sp"><h2 style="margin:0">Jobs that use the skills I want</h2><button class="sm ${J?'':'pri'}" data-act="coach" data-m="jobs" ${bj?'disabled':''}>${bj?'Searching…':(J?'More':'Suggest')}</button></div>`;
+  if(J&&J.list.length)h+=J.list.map((j,i)=>{const added=S.jobs.some(x=>x.title.toLowerCase()===String(j.title).toLowerCase());return `<div class="item"><div class="row sp"><b>${esc(j.title)}</b><span class="muted">${j.salary?man(+j.salary):''}</span></div><div>${Object.entries(j.req||{}).map(([n,l])=>`<span class="tag ${lvl(n)>=l?'ok':'gap'}">${esc(n)} ${esc(l)}</span>`).join('')}</div>${j.notes?`<div class="muted" style="margin-top:4px">${esc(j.notes)}</div>`:''}<div style="margin-top:6px">${added?'<span class="pill good">In your jobs</span>':`<button class="sm" data-act="addSug" data-i="${i}">+ Add to my jobs</button>`}</div></div>`}).join('');
+  else if(!bj)h+=`<div class="muted" style="margin-top:6px">Claude suggests new job profiles built around your ★ skills, with the skill levels each one needs.</div>`;
+  h+=`</div><div class="card muted" style="font-size:12px">Suggestions are Claude's estimates. Check salaries against real postings before acting on them.</div>`;
+  return h;
+}
+function addSug(i){const j=S.coach.jobs.list[i];if(!j)return;const req={};Object.entries(j.req||{}).forEach(([n,l])=>{const ex=S.skills.find(s=>s.name.toLowerCase()===n.toLowerCase());const nm=ex?ex.name:n;req[nm]=Math.max(1,Math.min(5,parseInt(l)||3));if(!ex)S.skills.push({id:uid(),name:n,cat:'From jobs',level:0,want:false})});S.jobs.push({id:uid(),title:String(j.title),tier:Math.max(1,Math.min(5,parseInt(j.tier)||3)),salary:+j.salary||0,req,notes:'Coach suggestion: '+(j.notes||'')});save();render();toast('Added '+j.title)}
+
+// ---------- country estimates (asks Claude) ----------
+let estBusy=false;
+async function estimate(codes){
+  const s=await getSample();if(!s){toast('Estimating needs this app opened in Claude');return}
+  estBusy=true;render();let done=0;
+  for(let k=0;k<codes.length;k+=20){
+    const chunk=codes.slice(k,k+20);
+    const p=document.getElementById('estProg');if(p)p.textContent=`Estimating ${done}/${codes.length}…`;
+    const input='Estimate, for an experienced mechanical design engineer (CAD/Creo, about 8 years, mid-senior level) in each country\'s main industrial city. Use the same scale as these reference points: Japan g=36000 t=24 l=14600 i=2.1; India g=10700 t=6 l=6700 i=5.5; Germany g=62000 t=39 l=28000 i=2.2. Fields: g = typical gross salary in US$/yr; t = effective income tax plus employee social insurance % at that salary; l = one person\'s yearly living cost in US$ (rent, food, transport, utilities); i = latest annual inflation %. Countries: '+chunk.map(c=>c+' ('+cname(c)+')').join(', ')+'. Return ONLY a JSON object keyed by the 2-letter code, like {"XX":{"g":0,"t":0,"l":0,"i":0}}. Give your best estimate for every country listed, even small ones.';
+    try{const v=await s.json(input);for(const c of chunk){const r=v&&v[c];if(r&&isFinite(+r.g)&&+r.g>0&&isFinite(+r.l))S.cAI[c]={g:+r.g,t:+r.t||0,l:+r.l,i:+r.i||0}}done+=chunk.length;S.coachOK=true;save()}
+    catch(e){if(e&&e.code==='not_granted')SAMPLE=null;toast(e&&e.code==='rate_limited'?'Paused: too many requests. Tap again in a minute.':'Estimate stopped. Tap again to continue.');break}
+  }
+  estBusy=false;render();
+}
+
+// ---------- live spending from Cost (Supabase via connector) ----------
+let MCP, costBusy=false, costErr='';
+async function getMcp(){if(MCP!==undefined)return MCP;try{MCP=(window.claude&&claude.use)?await claude.use('mcp'):null}catch(e){MCP=null}return MCP}
+const COST_PID='wylxvmkcrexwfpjpbhyy';
+const COST_SQL="select to_char(date,'YYYY-MM') m, coalesce(category,'Other') c, sum(amount)::int s, count(*)::int n from cost_management_expenses where region='JPY' and coalesce(expense_type,'')<>'outlier' and date>=date_trunc('month',current_date)-interval '12 months' group by 1,2 order by 1,2";
+const BUCKETS={Housing:'Rent',Supermarket:'Food',Convenience:'Food',Restaurant:'Food','Café':'Food','Asian shop':'Food',Transportation:'Transport'};
+function parseSql(p){
+  let t=p;
+  if(Array.isArray(t))return t;
+  if(t&&typeof t==='object'){if(Array.isArray(t.result))return t.result;t=t.result!=null?t.result:JSON.stringify(t)}
+  t=String(t);
+  const m=t.match(/<untrusted-data-[^>]*>\s*([\s\S]*?)\s*<\/untrusted-data/);
+  let body=m?m[1]:t.slice(t.indexOf('['),t.lastIndexOf(']')+1);
+  let v=JSON.parse(body);if(typeof v==='string')v=JSON.parse(v);return v;
+}
+async function syncCost(){
+  if(costBusy)return;const m=await getMcp();
+  if(!m){costErr='Open Belay inside Claude to load your Cost data.';render();return}
+  costBusy=true;costErr='';render();
+  try{
+    const r=await m.callTool('Supabase','execute_sql',{project_id:COST_PID,query:COST_SQL},{cache:false});
+    const rows=parseSql(r.payload!=null?r.payload:(r.content&&r.content[0]&&r.content[0].text));
+    if(!Array.isArray(rows))throw {code:'parse'};
+    S.cost={at:Date.now(),rows:rows.map(x=>({m:String(x.m),c:String(x.c),s:+x.s||0,n:+x.n||0}))};S.costOK=true;save();toast('Spending loaded from Cost');
+  }catch(e){
+    const c=e&&e.code;
+    costErr=c==='server_not_connected'?'Supabase is not connected to Claude. Add it in claude.ai Settings → Connectors, then tap Sync.':c==='needs_reauth'?'Supabase needs reconnecting in claude.ai Settings → Connectors.':(c==='approval_required'||c==='not_in_manifest')?'Belay needs your permission to read Supabase. Tap Sync and choose Allow.':c==='selection_required'?'Choose which Supabase connection to use when Claude asks, then tap Sync.':c==='blocked_by_policy'?'Your organisation blocks this Supabase tool for apps.':c==='server_unavailable'?'Supabase did not answer. Try Sync again in a moment.':(c==='not_granted'||c==='capability_disabled'||c==='capability_removed')?'Connectors are not available in this view. Open Belay inside Claude.':c==='parse'||e instanceof SyntaxError?'Supabase answered, but Belay could not read the result.':'Could not load: '+((e&&e.message)||'unknown error');
+  }
+  costBusy=false;render();
+}
+function costStats(){
+  if(!S.cost||!S.cost.rows||!S.cost.rows.length)return null;
+  const cur=today().slice(0,7),byM={};
+  S.cost.rows.forEach(r=>{const o=byM[r.m]=byM[r.m]||{t:0,b:{}};o.t+=r.s;const k=BUCKETS[r.c]||'Other';o.b[k]=(o.b[k]||0)+r.s});
+  const months=Object.keys(byM).filter(m=>m<cur).sort().reverse();
+  const skip=S.settings.costSkip||[],N=S.settings.costMonths||6;
+  const win=months.slice(0,N),used=win.filter(m=>!skip.includes(m));
+  const avg=used.length?used.reduce((a,m)=>a+byM[m].t,0)/used.length:0;
+  const b={};used.forEach(m=>Object.entries(byM[m].b).forEach(([k,v])=>b[k]=(b[k]||0)+v/used.length));
+  return {byM,win,used,avg,b,skip,cur:byM[cur]||{t:0,b:{}}};
+}
+function costCard(){
+  const cs=costStats();
+  let h=`<div class="card"><div class="row sp"><h2 style="margin:0">Your real spending · from Cost</h2><button class="sm ${S.cost?'':'pri'}" data-act="syncCost" ${costBusy?'disabled':''}>${costBusy?'Loading…':(S.cost?'Sync':'Connect Cost')}</button></div>`;
+  if(costErr)h+=`<div style="color:var(--bad);font-size:13px;margin-top:6px">${esc(costErr)}</div>`;
+  if(!S.cost)return h+`<div class="muted" style="margin-top:6px">Reads your expenses from the Cost app's Supabase (yen only, outliers left out). Belay only reads, it never changes anything. Your monthly average replaces the estimated living cost for Japan, and every other country is scaled to your lifestyle.</div></div>`;
+  h+=`<div class="muted" style="font-size:12px">Last synced ${esc(new Date(S.cost.at).toLocaleString())}</div>`;
+  if(cs&&cs.avg){
+    h+=`<div class="row sp" style="margin-top:8px"><div><div class="big">${yen(cs.avg)}</div><div class="muted">average per month · ${cs.used.length} month${cs.used.length===1?'':'s'}</div></div><div style="text-align:right"><div style="font-weight:600">${yen(cs.cur.t)}</div><div class="muted">${today().slice(0,7)} so far</div></div></div>`;
+    h+=`<div style="margin-top:6px">${['Rent','Food','Transport','Other'].map(k=>`<span class="tag">${k} ${yen(cs.b[k]||0)}</span>`).join('')}</div>`;
+  }else h+=`<div class="muted" style="margin-top:6px">No full months of yen spending in the chosen window yet.</div>`;
+  if(cs){
+    h+=`<div class="row wrap" style="margin-top:10px"><span class="muted">Average over</span><select id="costN" style="width:auto">${[3,6,12].map(n=>`<option value="${n}" ${(S.settings.costMonths||6)===n?'selected':''}>last ${n} months</option>`).join('')}</select><button class="sm" data-act="costUse">${S.settings.useCost!==false?'✓ Used in comparison':'Not used in comparison'}</button></div>`;
+    h+=`<div class="muted" style="font-size:12px;margin-top:8px">Tap a month to leave it out (a trip, moving house):</div><div>${cs.win.map(m=>{const off=cs.skip.includes(m);return `<span class="tag ${off?'':'ok'}" data-act="costSkip" data-m="${m}" style="cursor:pointer;${off?'text-decoration:line-through;opacity:.6':''}">${m} ${yen(cs.byM[m].t)}</span>`}).join('')}</div>`;
+  }
+  return h+`</div>`;
+}
+
+// ---------- views ----------
+function nav(){
+  const T=[["home","⌂","Climb"],["coach","✦","Coach"],["skills","◆","Skills"],["jobs","▲","Jobs"],["work","☰","Work"],["world","◎","Countries"]];
+  document.getElementById('nav').innerHTML=T.map(([k,i,l])=>`<button class="${tab===k?'on':''}" data-tab="${k}"><b>${i}</b>${l}</button>`).join('');
+}
+function vHome(){
+  if(!S.skills.length&&!S.jobs.length)return `<div class="card"><h2>Start your career map</h2><p class="muted">Add your skills and the jobs you're aiming for. The app then works out what's holding you back and which skill to learn next for the biggest jump.</p><div class="row wrap"><button class="pri" data-act="starter">Load my starter set</button><button data-act="addSkill">Add a skill</button></div><p class="muted">The starter set is a mechanical / robotics engineering profile. Edit every level and salary to match your reality.</p></div>`;
+  const cur=bestUnlocked();const nx=nextSkills();const st=streak();const wm=weekMin();const goal=S.settings.weeklyGoal||300;
+  const ladder=[...S.jobs].sort((a,b)=>a.tier-b.tier||a.salary-b.salary);
+  const stale=S.skills.filter(s=>s.want&&(!lastPractice(s.name)||(Date.now()-new Date(lastPractice(s.name)))>14*864e5));
+  const practicedToday=S.log.some(l=>l.d===today());
+  let h='';
+  h+=`<div class="card cta"><div class="muted">${practicedToday?'Nice, you practised today. Keep the chain going.':'You haven\'t practised today. The people who climb are the ones who show up daily.'}</div>`;
+  if(nx[0]){const n=nx[0];h+=`<div class="big" style="margin:6px 0 2px">Next: ${esc(n.n)} → ${LV[n.l+1]}</div><div class="muted">${n.unlocks.length?`Unlocks ${n.unlocks.map(j=>esc(j.title)).join(', ')}`:'Biggest step towards your higher-tier jobs'}${n.raise?` · potential +${man(n.raise)}/yr`:''}</div><div class="row" style="margin-top:10px"><button data-act="practice" data-s="${esc(n.n)}" style="background:#fff;color:#2f5bea;border:none;font-weight:600">Log 30 min</button><button data-act="practiceCustom" data-s="${esc(n.n)}" style="background:transparent;color:#fff;border-color:#ffffff88">Other amount</button></div>`}
+  h+=`</div>`;
+  const mg=moneyGap();
+  if(mg)h+=`<div class="card money"><div class="muted">Money you're leaving on the table</div><div style="font-weight:700;font-size:18px;margin:2px 0">+${man(mg.gap)}/yr · ${yen(mg.gap/365)} every day</div><div class="muted">That's what <b>${esc(mg.job.title)}</b> pays above your current level. You're ${Math.round(mg.m.pct*100)}% there. Close these:</div><div>${mg.m.gaps.map(g=>`<span class="tag gap">${esc(g.n)} ${g.m}→${g.r}</span>`).join('')}</div></div>`;
+  const cd=S.coach.daily;
+  h+=`<div class="card"><div class="row sp"><h2 style="margin:0">✦ Coach: today's push</h2><button class="sm" data-act="coach" data-m="daily" ${busy.daily?'disabled':''}>${busy.daily?'Thinking…':(cd&&cd.d===today()?'Refresh':'Get it')}</button></div><div class="coachtxt" id="co_daily" style="margin-top:6px">${busy.daily?md(live.daily||'Thinking…'):(cd&&cd.d===today()?md(cd.text):`<span class="muted">${SAMPLE===null?'Open this app in Claude to get daily coaching.':'Tap to get a specific task for today from Claude.'}</span>`)}</div></div>`;
+  const csH=costStats();
+  if(csH&&csH.avg){const keep=countryRows().base.net/12*(S.settings.fx||150)-csH.avg;h+=`<div class="card" data-tab="world" style="cursor:pointer"><div class="row sp"><h2 style="margin:0">This month's spending</h2><span class="muted">from Cost</span></div><div class="row sp" style="margin-top:4px"><div><div style="font-weight:700;font-size:18px">${yen(csH.cur.t)}</div><div class="muted">spent so far · average ${yen(csH.avg)}</div></div><div style="text-align:right"><div style="font-weight:700;font-size:18px;color:${keep>=0?'var(--good)':'var(--bad)'}">${yen(keep)}</div><div class="muted">you keep / month</div></div></div><div class="bar ${csH.cur.t<=csH.avg?'good':''}" style="margin-top:6px"><i style="width:${Math.min(100,csH.cur.t/csH.avg*100)}%"></i></div></div>`}
+  h+=`<div class="grid2"><div class="card"><div class="muted">Current level</div><div style="font-weight:700;font-size:16px">${cur?esc(cur.title):'No job unlocked yet'}</div><div class="muted">${cur?man(cur.salary)+'/yr · '+TIER[cur.tier]:`Reach ${UNLOCK*100}% match to unlock`}</div></div>
+  <div class="card"><div class="muted">Streak · this week</div><div style="font-weight:700;font-size:16px">${st} day${st===1?'':'s'} 🔥</div><div class="row"><div class="bar ${wm>=goal?'good':''}"><i style="width:${Math.min(100,wm/goal*100)}%"></i></div><span class="muted">${wm}/${goal}m</span></div></div></div>`;
+  h+=`<div class="card"><div class="row sp"><h2 style="margin:0">Last 4 weeks</h2><span class="muted">Don't leave a gap</span></div>${heat()}</div>`;
+  if(nx.length>1)h+=`<div class="card"><h2>Other high-value skills</h2>${nx.slice(1).map(n=>`<div class="item row sp"><div><b>${esc(n.n)}</b> <span class="muted">${LV[n.l]} → ${LV[n.l+1]}</span><div class="muted">${n.unlocks.length?'Unlocks '+n.unlocks.map(j=>esc(j.title)).join(', '):'Raises your match on higher-tier jobs'}</div></div><button class="sm" data-act="practice" data-s="${esc(n.n)}">+30m</button></div>`).join('')}</div>`;
+  h+=`<div class="card"><h2>Your ladder</h2><div class="muted" style="margin-bottom:6px">Locked jobs are below ${UNLOCK*100}% match. Tap one to see the gaps.</div>${ladder.map(j=>{const m=match(j);const ok=m.pct>=UNLOCK;return `<div class="item ${ok?'':'lock'}" data-act="editJob" data-id="${j.id}" style="cursor:pointer"><div class="row sp"><b>${ok?'✓':'🔒'} ${esc(j.title)}</b><span class="muted">${man(j.salary)}</span></div><div class="row"><span class="pill">${TIER[j.tier]}</span><div class="bar ${ok?'good':''}"><i style="width:${m.pct*100}%"></i></div><span class="muted">${Math.round(m.pct*100)}%</span></div></div>`}).join('')}</div>`;
+  if(stale.length)h+=`<div class="card"><h2>⚠ Skills you want but are neglecting</h2><div class="muted">No practice for 14+ days:</div>${stale.map(s=>`<span class="tag gap">${esc(s.name)}</span>`).join('')}</div>`;
+  return h;
+}
+function vSkills(){
+  const cats={};S.skills.forEach(s=>{(cats[s.cat||'Other']=cats[s.cat||'Other']||[]).push(s)});
+  let h=`<div class="card"><div class="row sp"><h2 style="margin:0">Skills</h2><button class="pri sm" data-act="addSkill">+ Add</button></div><div class="muted">Tap the boxes to set your level. ★ = a skill you <i>want</i> to work with. A green dashed box is the level the next job above you needs.</div></div>`;
+  const need={};S.jobs.forEach(j=>{if(match(j).pct<UNLOCK)Object.entries(j.req).forEach(([n,r])=>{need[n.toLowerCase()]=Math.min(need[n.toLowerCase()]||9,r)})});
+  for(const [c,list] of Object.entries(cats)){
+    h+=`<div class="card"><h2>${esc(c)}</h2>${list.map(s=>{const t=need[s.name.toLowerCase()];const lp=lastPractice(s.name);const used=S.work.filter(w=>(w.skills||[]).some(x=>x.toLowerCase()===s.name.toLowerCase())).length;
+      return `<div class="item"><div class="row sp"><div class="row"><span class="star ${s.want?'on':''}" data-act="want" data-id="${s.id}">★</span><b data-act="editSkill" data-id="${s.id}" style="cursor:pointer">${esc(s.name)}</b></div><span class="muted">${LV[s.level]}</span></div>
+      <div class="row sp" style="margin-top:6px"><div class="dots">${[1,2,3,4,5].map(i=>`<i class="${i<=s.level?'on':''} ${t&&t>s.level&&i===t?'tg':''}" data-act="setLv" data-id="${s.id}" data-v="${i}"></i>`).join('')}</div><button class="sm" data-act="practice" data-s="${esc(s.name)}">+30m</button></div>
+      <div class="muted" style="margin-top:4px">${hrs(s.name)} h logged · ${lp?'Last practised '+lp:'Never practised'} · used in ${used} work item${used===1?'':'s'}</div></div>`}).join('')}</div>`;
+  }
+  return h;
+}
+function vJobs(){
+  const js=[...S.jobs].sort((a,b)=>wantPct(b)-wantPct(a)||b.tier-a.tier);
+  let h=`<div class="card"><div class="row sp"><h2 style="margin:0">Job profiles</h2><button class="pri sm" data-act="addJob">+ Add</button></div><div class="muted">Sorted by how much each job uses the skills you ★ want. "Fit" = how ready you are.</div></div>`;
+  h+=js.map(j=>{const m=match(j);const w=wantPct(j);return `<div class="card" data-act="editJob" data-id="${j.id}" style="cursor:pointer"><div class="row sp"><b>${esc(j.title)}</b><span class="muted">${man(j.salary)}</span></div>
+  <div class="row wrap" style="margin:6px 0"><span class="pill">${TIER[j.tier]}</span><span class="pill ${w>=.5?'good':'warn'}">Wanted skills ${Math.round(w*100)}%</span><span class="pill ${m.pct>=UNLOCK?'good':''}">Fit ${Math.round(m.pct*100)}%</span></div>
+  <div>${m.have.map(g=>`<span class="tag ok">${esc(g.n)} ${g.r}</span>`).join('')}${m.gaps.map(g=>`<span class="tag gap">${esc(g.n)} ${g.m}→${g.r}</span>`).join('')}</div>${j.notes?`<div class="muted" style="margin-top:6px">${esc(j.notes)}</div>`:''}</div>`}).join('');
+  return h;
+}
+function vWork(){
+  const ws=[...S.work].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  let h=`<div class="card"><div class="row sp"><h2 style="margin:0">Work record</h2><button class="pri sm" data-act="addWork">+ Add</button></div><div class="muted">Projects and achievements. Each one is proof of a skill, and it's ready to copy into your CV.</div></div>`;
+  h+=ws.length?ws.map(w=>`<div class="card" data-act="editWork" data-id="${w.id}" style="cursor:pointer"><div class="row sp"><b>${esc(w.title)}</b><span class="muted">${esc(w.date||'')}</span></div><div class="muted">${esc(w.org||'')}</div>${w.desc?`<div style="margin-top:4px">${esc(w.desc)}</div>`:''}${w.impact?`<div style="margin-top:4px"><b>Impact:</b> ${esc(w.impact)}</div>`:''}<div style="margin-top:4px">${(w.skills||[]).map(s=>`<span class="tag">${esc(s)}</span>`).join('')}</div></div>`).join(''):`<div class="card muted">Nothing yet. Add your current role first.</div>`;
+  h+=`<div class="card"><h2>Backup</h2><div class="row wrap"><button class="sm" data-act="export">Copy all data (JSON)</button><button class="sm" data-act="import">Import JSON</button><button class="sm" data-act="weekly">Weekly goal</button></div></div>`;
+  return h;
+}
+function vWorld(){
+  const {rows,base,fx}=countryRows();const better=rows.filter(r=>r.vs>0).length;
+  const th=(k,l)=>`<th data-act="sortC" data-k="${k}">${l}${sortC===k?' ▾':''}</th>`;
+  return costCard()+`<div class="card"><h2>Where would you really earn more?</h2>
+  <div class="grid2"><div><label>Your gross salary in Japan (¥/yr)</label><input type="number" id="gross" value="${S.settings.gross}"></div><div><label>¥ per US$</label><input type="number" id="fx" value="${S.settings.fx}"></div></div>
+  <p class="muted">This assumes you'd earn at the same level relative to local engineers as you do in Japan. Then it takes off income tax and social insurance, a single person's living costs (rent, food, transport) and one year of inflation. <b>${better}</b> of ${rows.length} countries leave you more money than Japan (${yen(base.real/12*fx)}/month left over).</p></div>
+  <div class="card scroll"><table><thead><tr>${th('name','Country')}${th('surplus','Left / mo')}<th>vs JP/yr</th>${th('gross','Gross')}<th>Tax</th>${th('net','Take-home')}<th>Living</th><th>Infl.</th></tr></thead><tbody>
+  ${rows.map(r=>`<tr class="click ${r.c==='JP'?'me':''}" data-act="editC" data-c="${r.c}"><td>${flag(r.c)} ${esc(r.n)}${r.edited?' ✎':''}${r.ai?' <span class="pill" style="font-size:10px;padding:0 5px">AI</span>':''}</td><td style="font-weight:600;color:${r.real>=0?'var(--good)':'var(--bad)'}">${yen(r.real/12*fx)}</td><td style="color:${r.vs>=0?'var(--good)':'var(--bad)'}">${r.vs>=0?'+':''}${man(r.vs*fx)}</td><td>${man(r.gross*fx)}</td><td>${Math.round(r.tax)}%</td><td>${man(r.net*fx)}</td><td>${man(r.l*fx)}</td><td style="color:${r.i>6?'var(--bad)':'inherit'}">${r.i}%</td></tr>`).join('')}
+  </tbody></table></div>
+  <div class="card muted">Japan and India were checked against published data in November 2026 (senior mechanical design engineer pay, official inflation, Japan's household survey, India's FY2026-27 tax rules). Germany, Netherlands, Singapore, UAE and Canada have checked 2026 salaries and inflation; their tax is calculated for a single person and their living costs are still estimates. The other countries are rough starting estimates for engineering salaries, taxes, living costs and inflation (single person, mid-size city). Tap any country to put in figures you've researched yourself, such as a real job offer, the rent in your target city (for example Pune), or a tax calculator result. Edited countries show ✎. In Gulf countries tax is near 0%, but schooling and housing benefits vary a lot from offer to offer.</div>
+  ${(()=>{const miss=missingC();const tot=allBase().length+miss.length;return `<div class="card"><h2>Cover every country</h2><div class="muted">${allBase().length} of ${tot} countries have figures. ${miss.length?`Claude can estimate the other ${miss.length} (marked AI). They're rough, so check any country you're seriously considering.`:'Every country is covered.'}</div>${miss.length?`<div class="row wrap" style="margin-top:8px"><button class="pri sm" data-act="estAll" ${estBusy?'disabled':''}>${estBusy?'Working…':'Estimate all '+miss.length}</button><select id="estSel" style="width:auto;flex:1">${miss.map(c=>`<option value="${c}">${flag(c)} ${esc(cname(c))}</option>`).sort().join('')}</select><button class="sm" data-act="estOne" ${estBusy?'disabled':''}>Estimate one</button></div><div class="muted" id="estProg" style="margin-top:6px"></div>`:''}${Object.keys(S.cAI).length?`<button class="sm ghost" data-act="estClear" style="margin-top:6px">Remove AI estimates</button>`:''}</div>`})()}`;
+}
+function render(){
+  nav();
+  renderRank();
+  const v={home:vHome,coach:vCoach,skills:vSkills,jobs:vJobs,work:vWork,world:vWorld}[tab]();
+  document.getElementById('app').innerHTML=v;
+  if(tab==='world'){['gross','fx'].forEach(id=>{const el=document.getElementById(id);el.onchange=()=>{S.settings[id]=+el.value||0;save();render()}});const cn=document.getElementById('costN');if(cn)cn.onchange=()=>{S.settings.costMonths=+cn.value;save();render()}}
+}
+
+// ---------- forms ----------
+function form(title,fields,vals,onSave,onDel){
+  const sh=document.getElementById('sheet');
+  sh.innerHTML=`<div class="row sp"><h2 style="margin:0">${esc(title)}</h2><button class="ghost" id="fx_close">Close</button></div>`+fields.map(f=>`<label>${esc(f.l)}</label>`+(f.t==='select'?`<select id="f_${f.k}">${f.o.map((o,i)=>`<option value="${esc(f.ov?f.ov[i]:o)}" ${String(vals[f.k])===String(f.ov?f.ov[i]:o)?'selected':''}>${esc(o)}</option>`).join('')}</select>`:f.t==='area'?`<textarea id="f_${f.k}" rows="${f.r||3}" placeholder="${esc(f.p||'')}">${esc(vals[f.k]??'')}</textarea>`:`<input id="f_${f.k}" type="${f.t||'text'}" value="${esc(vals[f.k]??'')}" placeholder="${esc(f.p||'')}">`)).join('')+`<div class="row sp" style="margin-top:14px">${onDel?'<button id="fx_del" style="color:var(--bad)">Delete</button>':'<span></span>'}<button class="pri" id="fx_save">Save</button></div>`;
+  document.getElementById('modal').classList.add('on');
+  const close=()=>document.getElementById('modal').classList.remove('on');
+  document.getElementById('fx_close').onclick=close;
+  document.getElementById('fx_save').onclick=()=>{const o={};fields.forEach(f=>{let v=document.getElementById('f_'+f.k).value;if(f.t==='number')v=v===''?null:+v;o[f.k]=v});if(onSave(o)!==false){close();save();render()}};
+  if(onDel)document.getElementById('fx_del').onclick=()=>{if(document.getElementById('fx_del').dataset.sure){onDel();close();save();render()}else{document.getElementById('fx_del').dataset.sure=1;document.getElementById('fx_del').textContent='Tap again to delete'}};
+}
+const parseReq=t=>{const o={};(t||'').split('\n').forEach(l=>{const m=l.split(/[:=]/);const n=(m[0]||'').trim();if(n)o[n]=Math.max(1,Math.min(5,parseInt(m[1])||3))});return o};
+const reqText=r=>Object.entries(r||{}).map(([n,v])=>n+': '+v).join('\n');
+function skillForm(s){
+  form(s?'Edit skill':'New skill',[{k:'name',l:'Skill'},{k:'cat',l:'Category',p:'CAD, Robotics, Software…'},{k:'level',l:'Your level',t:'select',o:LV.map((l,i)=>i+' · '+l),ov:[0,1,2,3,4,5]},{k:'want',l:'Do you want to work with this?',t:'select',o:['Yes ★','Neutral'],ov:['1','']}],s?{...s,want:s.want?'1':''}:{level:2,want:''},o=>{if(!o.name.trim())return false;o.level=+o.level;o.want=!!o.want;if(s)Object.assign(s,o);else S.skills.push({id:uid(),...o})},s?()=>{S.skills=S.skills.filter(x=>x!==s)}:null);
+}
+function jobForm(j){
+  const m=j?match(j):null;
+  form(j?j.title:'New job profile',[{k:'title',l:'Job title'},{k:'tier',l:'Level',t:'select',o:TIER.slice(1),ov:[1,2,3,4,5]},{k:'salary',l:'Typical salary (¥/yr)',t:'number'},{k:'req',l:'Required skills, one per line as "Skill: level 1–5"',t:'area',r:6,p:'Creo Parametric: 4\nPython: 3'},{k:'notes',l:'Notes (companies, links, where you saw it)',t:'area'}],j?{...j,req:reqText(j.req)}:{tier:3,salary:7000000},o=>{if(!o.title.trim())return false;o.tier=+o.tier;o.req=parseReq(o.req);for(const n of Object.keys(o.req))if(!S.skills.some(s=>s.name.toLowerCase()===n.toLowerCase()))S.skills.push({id:uid(),name:n,cat:'From jobs',level:0,want:false});if(j)Object.assign(j,o);else S.jobs.push({id:uid(),...o})},j?()=>{S.jobs=S.jobs.filter(x=>x!==j)}:null);
+  if(m&&m.gaps.length){document.getElementById('sheet').insertAdjacentHTML('afterbegin',`<div class="card" style="margin-top:0"><b>Gaps to close:</b> ${m.gaps.map(g=>`<span class="tag gap">${esc(g.n)} ${LV[g.m]}→${LV[g.r]}</span>`).join('')}</div>`)}
+}
+function workForm(w){
+  form(w?'Edit work item':'New work item',[{k:'title',l:'What you did',p:'Designed welding fixture for truck frame'},{k:'org',l:'Company / project'},{k:'date',l:'Date',t:'date'},{k:'desc',l:'Details',t:'area'},{k:'impact',l:'Impact (numbers are best)',p:'Cut cycle time 18%'},{k:'skills',l:'Skills used (comma-separated)',p:'Creo Parametric, GD&T'}],w?{...w,skills:(w.skills||[]).join(', ')}:{date:today()},o=>{if(!o.title.trim())return false;o.skills=o.skills.split(',').map(x=>x.trim()).filter(Boolean);if(w)Object.assign(w,o);else S.work.push({id:uid(),...o})},w?()=>{S.work=S.work.filter(x=>x!==w)}:null);
+}
+function toast(t,big){const e=document.getElementById('toast');e.textContent=t;e.className='toast'+(big?' big':'');e.style.display='block';clearTimeout(e._t);e._t=setTimeout(()=>e.style.display='none',big?4000:2200)}
+function logPractice(s,m){
+  const before=bestUnlocked();S.log.push({d:today(),s,m});
+  const total=S.log.filter(l=>l.s===s).reduce((a,l)=>a+l.m,0);
+  const r0=before;const rk=xpInfo();
+  toast(`+${m} XP · ${Math.round(total/60*10)/10} h on ${s} · streak ${streak()} 🔥${rk.next?' · '+rk.need+' XP to '+rk.next:''}`);save();render();
+}
+
+// ---------- events ----------
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-tab],[data-act]');if(!t)return;
+  if(t.dataset.tab){tab=t.dataset.tab;render();scrollTo(0,0);return}
+  const a=t.dataset.act,id=t.dataset.id;
+  if(a==='starter'){S.skills=STARTER_SKILLS.map(([n,c,l])=>({id:uid(),name:n,cat:c,level:l,want:STARTER_WANT.includes(n)}));S.jobs=STARTER_JOBS.map(([title,tier,salary,req])=>({id:uid(),title,tier,salary,req,notes:'Starter estimate: edit the salary and skills to match real postings.'}));save();render()}
+  if(a==='addSkill')skillForm();
+  if(a==='editSkill')skillForm(S.skills.find(s=>s.id===id));
+  if(a==='setLv'){const s=S.skills.find(s=>s.id===id);const v=+t.dataset.v;const b=bestUnlocked(),r0=xpInfo().name,old=s.level;s.level=s.level===v?v-1:v;const af=bestUnlocked(),r1=xpInfo();save();render();
+    if(af&&(!b||af.salary>b.salary))toast(`🔓 Unlocked: ${af.title} · ${man(af.salary)}/yr`,1);
+    else if(r1.name!==r0&&s.level>old)toast(`⬆ Rank up: ${r1.name}!`,1);
+    else if(s.level>old)toast(`${s.name} → ${LV[s.level]} · +${(s.level*s.level-old*old)*40} XP`)}
+  if(a==='coach'){runCoach(t.dataset.m)}
+  if(a==='addSug'){addSug(+t.dataset.i)}
+  if(a==='estAll'){if(!estBusy)estimate(missingC())}
+  if(a==='estOne'){const c=document.getElementById('estSel').value;if(c&&!estBusy)estimate([c])}
+  if(a==='estClear'){S.cAI={};save();render()}
+  if(a==='want'){const s=S.skills.find(s=>s.id===id);s.want=!s.want;save();render()}
+  if(a==='practice'){e.stopPropagation();logPractice(t.dataset.s,30)}
+  if(a==='practiceCustom'){const s=t.dataset.s;form('Log practice: '+s,[{k:'m',l:'Minutes',t:'number'}],{m:60},o=>{if(!o.m)return false;S.log.push({d:today(),s,m:o.m});toast(`+${o.m} min on ${s}`)})}
+  if(a==='addJob')jobForm();
+  if(a==='editJob')jobForm(S.jobs.find(j=>j.id===id));
+  if(a==='addWork')workForm();
+  if(a==='editWork')workForm(S.work.find(w=>w.id===id));
+  if(a==='sortC'){sortC=t.dataset.k;render()}
+  if(a==='editC'){const c=t.dataset.c;const base=COUNTRIES.find(x=>x[0]===c);const o=S.cOver[c]||{};
+    form(flag(c)+' '+base[1],[{k:'g',l:'Typical engineer gross salary (US$/yr) for your level',t:'number'},{k:'t',l:'Effective tax + social insurance at that salary (%)',t:'number'},{k:'l',l:'Your yearly living cost there (US$, rent + food + transport)',t:'number'},{k:'i',l:'Inflation (%/yr)',t:'number'}],{g:o.g??base[2],t:o.t??base[3],l:o.l??base[4],i:o.i??base[5]},v=>{S.cOver[c]=v},S.cOver[c]?()=>{delete S.cOver[c]}:null);
+    if(S.cOver[c])document.getElementById('fx_del').textContent='Reset to estimate'}
+  if(a==='syncCost'){syncCost()}
+  if(a==='costUse'){S.settings.useCost=S.settings.useCost===false;save();render()}
+  if(a==='costSkip'){const m=t.dataset.m;const k=S.settings.costSkip=S.settings.costSkip||[];const i=k.indexOf(m);if(i>=0)k.splice(i,1);else k.push(m);save();render()}
+  if(a==='weekly')form('Weekly practice goal',[{k:'w',l:'Minutes per week',t:'number'}],{w:S.settings.weeklyGoal},o=>{S.settings.weeklyGoal=o.w||300});
+  if(a==='export'){const txt=JSON.stringify(S);navigator.clipboard.writeText(txt).then(()=>toast('Copied to clipboard'),()=>{form('Your data',[{k:'d',l:'Select all and copy',t:'area',r:10}],{d:txt},()=>{})})}
+  if(a==='import')form('Import data',[{k:'d',l:'Paste JSON you exported earlier',t:'area',r:10}],{},o=>{try{S=normalize(JSON.parse(o.d))}catch(err){toast('That is not valid JSON');return false}});
+});
+document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')e.currentTarget.classList.remove('on')});
+boot();
+</script>
+</body>
+</html>
