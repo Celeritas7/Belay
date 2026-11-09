@@ -1,0 +1,120 @@
+/* Shared layout, touch controls and responsive views. Data stays in Supabase. */
+:root{--bg:#f4f6f8;--ink:#192b3c;--mute:#596977;--line:#dde4ea;--acc:#315dbe;--acc2:#eaf0fc;--primary-ink:#fff;--good:#147552;--goodbg:#e8f5ee;--bad:#b13b26}
+body{font-size:15px;line-height:1.55;padding-bottom:100px}
+header,main{max-width:1000px}
+header{padding:24px 24px 0}
+header h1{font-size:24px;letter-spacing:-.8px}
+#account{text-align:right;min-height:28px}
+#account button{min-height:32px}
+#saveState{text-align:right;font-size:12px}
+main{padding:8px 24px 24px}
+button,input,select,textarea{min-height:44px}
+button{font-weight:500;transition:background .15s,border-color .15s}
+button:hover:not(:disabled){border-color:var(--acc);background:var(--acc2)}
+button.pri{color:var(--primary-ink)}
+button.pri:hover:not(:disabled){background:var(--acc);filter:brightness(.95)}
+button:disabled{opacity:.55;cursor:default}
+button.sm{padding:8px 12px}
+button.ghost{padding:8px 4px}
+button:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--acc);outline-offset:3px}
+input,select,textarea{font-size:16px}
+label{font-size:13px;font-weight:500;margin:8px 0 6px}
+h2,h3,p{overflow-wrap:anywhere}
+h3{font-size:15px}
+.card{padding:22px;border-radius:18px;margin:14px 0;box-shadow:0 2px 3px #14263e03}
+.card h2{font-size:17px;line-height:1.35;margin-bottom:8px}
+.card p:last-child{margin-bottom:0}
+.muted{font-size:13px;line-height:1.6}
+.page-title{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:8px 0 22px}
+.page-title h2{font-size:28px;line-height:1.2;letter-spacing:-.7px;margin:0 0 8px}
+.page-title p{margin:0}
+.page-title>button{flex-shrink:0}
+.hero{border-color:#b7c9ec;background:var(--acc2);padding:28px}
+.hero h2{font-size:30px;letter-spacing:-.6px;line-height:1.25;margin:18px 0 10px}
+.hero>p{max-width:58ch;margin:10px 0}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:1.3px;color:var(--acc)}
+.action-row{margin-top:20px}
+.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.metric{display:flex;flex-direction:column;align-items:flex-start;gap:10px;min-width:0;margin:0}
+.metric strong{font-size:28px;font-weight:700;line-height:1.25}
+.metric small{font-size:13px;color:var(--mute);font-weight:400}
+.metric .bar{flex:none;width:100%;height:6px}
+.metric button{text-align:left;line-height:1.4;overflow-wrap:anywhere;max-width:100%}
+.bar{height:7px}
+.heat{gap:6px;margin-top:15px;max-width:660px}
+.heat i{border-radius:5px;max-height:34px}
+.target-card{border-top:3px solid var(--acc)}
+.target-card .eyebrow{display:block;margin-bottom:12px}
+.target-card>.bar{margin-top:12px}
+.target-card h3{margin:22px 0 6px}
+.section-label{display:flex;align-items:center;gap:10px;margin:26px 0 8px;font-size:14px}
+.segments{display:flex;flex-wrap:wrap;gap:6px;background:var(--line);padding:5px;border-radius:13px;margin:16px 0}
+.segments button{flex:1;background:transparent;border:1px solid transparent;color:var(--mute);white-space:nowrap}
+.segments button.selected{background:var(--card);color:var(--acc);border-color:var(--card);box-shadow:0 1px 4px #14263e0a}
+.filters span{display:inline-block;margin-left:4px;font-size:11px;font-weight:400}
+.skill-card .row>div:first-child{min-width:0}
+.skill-card h2{margin-bottom:4px}
+.skill-card .star{flex-shrink:0;min-width:44px;font-size:24px;background:transparent}
+.skill-card .star.on{color:var(--warn)}
+.level-picker{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:20px 0}
+.level-picker button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:66px;padding:9px 4px;font-size:12px;color:var(--mute)}
+.level-picker b{font-size:16px}
+.level-picker .selected{background:var(--acc2);color:var(--acc);border:2px solid var(--acc)}
+.job-details{padding:0}
+summary{cursor:pointer;font-weight:600;padding:3px 0}
+.job-details summary{display:flex;align-items:center;gap:12px;padding:20px}
+.job-details summary:before{content:'›';font-size:24px;color:var(--mute);flex-shrink:0}
+.job-details[open] summary:before{transform:rotate(90deg)}
+.job-details summary>span:first-of-type{flex:1;min-width:0}
+.job-details summary strong{display:block;font-size:15px;overflow-wrap:anywhere}
+.job-details summary .muted{display:block;margin-top:4px;font-weight:400}
+.job-details summary .pill{white-space:nowrap}
+.detail-body{padding:0 22px 22px;border-top:1px solid var(--line)}
+.menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.menu-card{display:flex;align-items:center;text-align:left;gap:18px;width:100%;margin:0;padding:24px}
+.menu-card>span:nth-child(2){flex:1}
+.menu-card strong{display:block;margin-bottom:6px;font-size:17px}
+.menu-card .muted{display:block;font-weight:400}
+.menu-icon{font-size:27px;color:var(--acc)}
+.migration-panel{margin-top:24px;border-top:1px solid var(--line);padding-top:12px}
+.comparison-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px}
+.country-card{margin:0;min-width:0}
+.country-card.baseline{border-color:var(--acc)}
+.country-card h2{margin:0}
+.country-card>.row{margin-bottom:22px}
+.country-money{display:block;font-size:28px;margin:5px 0;color:var(--good);letter-spacing:-.6px}
+.comparison-diff{color:var(--good);font-weight:500;font-size:13px;min-height:40px}
+.negative{color:var(--bad)!important}
+dl{font-size:13px;margin:18px 0 22px}
+dl>div{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)}
+dt{color:var(--mute)}
+dd{margin:0;font-weight:600;white-space:nowrap}
+.country-card>button{width:100%}
+.scroll{margin-top:16px;overscroll-behavior-x:contain}
+nav{justify-content:center;gap:10px;padding-top:8px;box-shadow:0 -3px 18px #14263e06}
+nav:empty{display:none}
+nav button{flex:1;max-width:150px;min-height:54px;border-radius:12px;font-size:12px;gap:3px}
+nav button.on{background:var(--acc2)}
+nav button b{font-size:20px;line-height:1.1}
+#modal .sheet{padding:24px;border-radius:22px 22px 0 0;box-shadow:0 -10px 40px #0002;padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+#loginForm{max-width:440px;margin:22px 0}
+.empty{text-align:center;padding:34px 22px}
+@media(min-width:760px){.hero{padding:32px}.metrics{margin:18px 0}.hero .action-row{margin-top:24px}}
+@media(max-width:600px){
+ header{padding:18px 16px 0}main{padding:8px 16px 22px}
+ header h1{font-size:22px}.page-title{align-items:flex-start;margin-bottom:18px;gap:10px}.page-title h2{font-size:25px}.page-title>button{font-size:13px;padding:8px 10px}
+ .card{padding:18px;border-radius:15px}.hero{padding:22px}.hero h2{font-size:27px}.hero .row{gap:8px}
+ .metrics{gap:8px}.metric{padding:12px 9px;gap:8px}.metric strong{font-size:24px}.metric small{display:block;font-size:11px;margin-top:4px}.metric>.muted{font-size:11px}.metric button{font-size:11px;padding:4px 0}.metric .bar{height:5px}
+ .level-picker{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.level-picker button{min-height:64px;font-size:12px}
+ .segments{gap:3px;padding:4px}.segments button{font-size:12px;padding:8px 5px}.filters span{margin-left:2px}
+ .menu-grid,.comparison-grid{grid-template-columns:1fr}.menu-card{padding:22px 18px}.country-card{padding:22px}.comparison-diff{min-height:0}
+ .job-details{padding:0}.job-details summary{padding:18px 14px;gap:8px}.detail-body{padding:0 18px 18px}
+ .heat{gap:4px}.heat i{border-radius:3px}
+ nav{gap:4px;padding-left:8px;padding-right:8px}nav button{font-size:11px}
+}
+@media(max-width:360px){.grid2{grid-template-columns:1fr}.filters button{white-space:normal}.skill-card>.row:last-child{align-items:stretch}.skill-card>.row:last-child>.row{flex-wrap:wrap;gap:6px}}
+@media(prefers-color-scheme:dark){
+ :root{--bg:#101720;--card:#19222e;--ink:#eef2f7;--mute:#aebaca;--line:#303e50;--acc:#a9c0ff;--acc2:#243552;--primary-ink:#152748;--good:#77d3aa;--goodbg:#173e32;--bad:#ffa28d}
+ .hero{border-color:#3b5278}.segments{background:#111a26}.star.on{color:#f2c057}
+}
+@media(prefers-reduced-motion:reduce){button{transition:none}}

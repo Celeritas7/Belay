@@ -27,11 +27,16 @@ function notice(){
   const el=document.getElementById('syncNotice');
   el.innerHTML=cloud.error?`<div class="card" style="border-color:var(--bad)"><b>Changes are not saved</b><p>${esc(cloud.error)}</p><button id="retryCloud">Retry save</button> <button id="exportCloud">Download my changes</button> <button id="reloadCloud">Load cloud version</button></div>`:'';
   if(cloud.error){document.getElementById('retryCloud').onclick=()=>flushSave();document.getElementById('exportCloud').onclick=downloadState;document.getElementById('reloadCloud').onclick=()=>{if(!cloud.dirty||confirm('Discard unsaved changes and load the cloud version? Download your changes first if needed.')){cloud.dirty=false;cloud.conflict=false;cloud.error='';loadCloud();}};}
-  if(cloud.ready){document.getElementById('account').innerHTML=`<div class="row wrap muted" style="margin-top:8px"><span>${esc(cloud.user.email||'Signed in')}</span><button class="sm" id="refreshCloud">Refresh</button><button class="sm" id="signOut">Sign out</button>${cloud.legacy?'<button class="sm" id="migrateLocal">Move device data to cloud</button>':''}</div>`;
-    document.getElementById('refreshCloud').onclick=()=>{if(cloud.dirty){cloud.error='Save or download your pending changes before refreshing.';notice();}else loadCloud();};
-    document.getElementById('signOut').onclick=async()=>{await flushSave();if(cloud.dirty){cloud.error='Save or download your pending changes before signing out.';notice();return;}const {error}=await cloud.client.auth.signOut();if(error){cloud.error=error.message;notice();}};
-    if(cloud.legacy)document.getElementById('migrateLocal').onclick=migrateLocal;
+  if(cloud.ready){
+    document.getElementById('account').innerHTML=`<button class="ghost sm" data-tab="settings">Settings${cloud.legacy?' · Device records found':''}</button>`;
+    bindAccountControls();
   }
+}
+function bindAccountControls(){
+  const refresh=document.getElementById('refreshCloud'),signOut=document.getElementById('signOut'),migrate=document.getElementById('migrateLocal');
+  if(refresh)refresh.onclick=()=>{if(cloud.dirty){cloud.error='Save or download your pending changes before refreshing.';notice();}else loadCloud();};
+  if(signOut)signOut.onclick=async()=>{await flushSave();if(cloud.dirty){cloud.error='Save or download your pending changes before signing out.';notice();return;}const {error}=await cloud.client.auth.signOut();if(error){cloud.error=error.message;notice();}};
+  if(migrate&&cloud.legacy)migrate.onclick=migrateLocal;
 }
 function downloadState(){
   const url=URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='belay-backup-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -75,7 +80,7 @@ async function migrateLocal(){
     if(await flushSave()){
       // Remove only the exact migrated copy, after a successful server acknowledgement.
       if(localStorage.getItem('careerClimb')===raw)localStorage.removeItem('careerClimb');
-      cloud.legacy=null;notice();toast('Device data moved to your cloud account.');
+      cloud.legacy=null;notice();if(tab==='settings')render();toast('Device data moved to your cloud account.');
     }
   }catch(e){cloud.error=e.message;notice();}
 }

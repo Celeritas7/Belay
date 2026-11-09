@@ -8,7 +8,7 @@ const root=path.resolve(__dirname,'..');
 const ref={LV:['None','Aware','Basic','Working','Strong','Expert'],TIER:['','Entry','Mid','Senior','Lead','Manager'],COUNTRIES:[['JP','Japan',36000,24,14600,2.1]],STARTER_SKILLS:[['Test skill','Design',2]],STARTER_WANT:['Test skill'],STARTER_JOBS:[['Test job',2,100,{"Test skill":2}]],RANKS:[[0,'Apprentice'],[1000,'Engineer']],PERSONA:'Test coach',PROMPTS:{daily:'Test prompt'},BUCKETS:{},settings:{gross:5500000,fx:157,weeklyGoal:300}};
 const blank=()=>({skills:[],jobs:[],work:[],log:[],settings:{},cOver:{},cAI:{},coach:{}});
 test('cloud persistence, migration, conflicts, recovery, views and logout',async()=>{
- const server=http.createServer((req,res)=>{const file=path.join(root,req.url==='/'?'index.html':req.url.split('?')[0]);res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':'text/html');res.end(fs.readFileSync(file));});
+ const server=http.createServer((req,res)=>{const file=path.join(root,req.url==='/'?'index.html':req.url.split('?')[0]);res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(file));});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  let browser;try{browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});}catch(e){server.close();throw e;}
  let record=null, fail=false;const errors=[];
@@ -38,19 +38,29 @@ test('cloud persistence, migration, conflicts, recovery, views and logout',async
   await page.getByRole('button',{name:'Load example starter set'}).click();
   await page.waitForFunction(()=>document.getElementById('saveState').textContent==='Saved to cloud ✓');
   assert.equal(record.data.skills[0].name,'Test skill');
-  await page.reload();await page.getByRole('button',{name:'◆ Skills'}).click();
-  await page.getByRole('button',{name:'+30m'}).click();await page.waitForFunction(()=>document.getElementById('saveState').textContent==='Saved to cloud ✓');assert.equal(record.data.log[0].m,30);
-  for(const name of ['✦ Coach','▲ Jobs','☰ Work','◎ Countries','⌂ Climb'])await page.getByRole('button',{name,exact:true}).click();
+  await page.reload();await page.getByRole('button',{name:'Skills',exact:true}).click();
+  await page.getByRole('button',{name:'+30 min',exact:true}).click();await page.waitForFunction(()=>document.getElementById('saveState').textContent==='Saved to cloud ✓');assert.equal(record.data.log[0].m,30);
+  await page.getByRole('button',{name:'Career',exact:true}).click();
+  await page.getByLabel('Your focus',{exact:true}).selectOption(record.data.jobs[0].id);
+  await page.getByRole('button',{name:'Work record',exact:true}).click();
+  await page.getByRole('button',{name:'More',exact:true}).click();
+  await page.locator('main [data-tab="coach"]').click();
+  await page.getByRole('button',{name:'More',exact:true}).click();
+  await page.locator('main [data-tab="world"]').click();
+  await page.getByRole('button',{name:'Overview',exact:true}).click();
+  await page.waitForFunction(()=>document.getElementById('saveState').textContent==='Saved to cloud ✓');
+  assert.equal(record.data.settings.targetJobId,record.data.jobs[0].id);
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   // A database edit must not be overwritten by this stale browser.
   record.version++;record.data.external='from database';
-  await page.getByRole('button',{name:'◆ Skills'}).click();await page.getByRole('button',{name:'+30m'}).click();await page.getByText('Changes are not saved',{exact:true}).waitFor();assert.equal(record.data.log.length,1);assert.equal(record.data.external,'from database');
-  page.on('dialog',d=>d.accept());await page.getByRole('button',{name:'Load cloud version'}).click();await page.getByRole('button',{name:'+30m'}).waitFor();
-  fail=true;await page.getByRole('button',{name:'+30m'}).click();await page.getByText('Changes are not saved',{exact:true}).waitFor();fail=false;await page.getByRole('button',{name:'Retry save'}).click();await page.waitForFunction(()=>document.getElementById('saveState').textContent==='Saved to cloud ✓');assert.equal(record.data.log.length,2);
+  await page.getByRole('button',{name:'Skills',exact:true}).click();await page.getByRole('button',{name:'+30 min',exact:true}).click();await page.getByText('Changes are not saved',{exact:true}).waitFor();assert.equal(record.data.log.length,1);assert.equal(record.data.external,'from database');
+  page.on('dialog',d=>d.accept());await page.getByRole('button',{name:'Load cloud version'}).click();await page.getByRole('button',{name:'+30 min',exact:true}).waitFor();
+  fail=true;await page.getByRole('button',{name:'+30 min',exact:true}).click();await page.getByText('Changes are not saved',{exact:true}).waitFor();fail=false;await page.getByRole('button',{name:'Retry save'}).click();await page.waitForFunction(()=>document.getElementById('saveState').textContent==='Saved to cloud ✓');assert.equal(record.data.log.length,2);
   // Migration is opt-in and removes the device copy only after server acknowledgement.
   const legacy={...blank(),skills:[{id:'legacy',name:'Migrated skill',cat:'CAD',level:3}]};
-  await page.evaluate(data=>localStorage.setItem('careerClimb',JSON.stringify(data)),legacy);await page.reload();await page.getByRole('button',{name:'Move device data to cloud'}).click();await page.waitForFunction(()=>localStorage.getItem('careerClimb')===null);assert.equal(record.data.skills[0].name,'Migrated skill');
-  await page.getByRole('button',{name:'◎ Countries'}).click();await page.getByRole('button',{name:'Connect Cost'}).click();await page.waitForFunction(()=>document.getElementById('saveState').textContent==='Saved to cloud ✓');assert.equal(record.data.cost.rows[0].s,10000);
-  await page.getByRole('button',{name:'Sign out',exact:true}).click();await page.getByRole('heading',{name:'Sign in to Belay'}).waitFor();assert.equal(await page.locator('#rank').innerText(),'');assert.deepEqual(errors,[]);
+  await page.evaluate(data=>localStorage.setItem('careerClimb',JSON.stringify(data)),legacy);await page.reload();await page.locator('#account [data-tab="settings"]').click();await page.getByRole('button',{name:'Move device data to cloud'}).click();await page.waitForFunction(()=>localStorage.getItem('careerClimb')===null);assert.equal(record.data.skills[0].name,'Migrated skill');
+  await page.getByRole('button',{name:'More',exact:true}).click();await page.locator('main [data-tab="world"]').click();await page.getByRole('button',{name:'Connect Cost'}).click();await page.waitForFunction(()=>document.getElementById('saveState').textContent==='Saved to cloud ✓');assert.equal(record.data.cost.rows[0].s,10000);
+  await page.locator('#account [data-tab="settings"]').click();await page.getByRole('button',{name:'Sign out',exact:true}).click();await page.getByRole('heading',{name:'Sign in to Belay'}).waitFor();assert.equal(await page.locator('#rank').innerText(),'');assert.deepEqual(errors,[]);
   assert.equal(await page.evaluate(()=>localStorage.getItem('careerClimb')),null);
  }finally{await browser.close();await new Promise(r=>server.close(r));}
 });

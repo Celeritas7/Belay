@@ -76,19 +76,20 @@ label{display:block;font-size:12px;color:var(--mute);margin:8px 0 3px}
 .toast.big{font-size:16px;padding:14px 18px;background:linear-gradient(135deg,#14915f,#2f5bea);color:#fff;font-weight:600}
 nav button{padding:4px 3px}
 </style>
+<link rel="stylesheet" href="ui.css?v=2">
 </head>
 <body>
 <header>
-  <div class="row sp"><h1>Belay</h1><span class="muted" id="saveState"></span></div>
+  <div class="row sp"><h1>Belay</h1><span class="muted" id="saveState" role="status" aria-live="polite"></span></div>
   <div id="account"></div><div id="syncNotice" role="status" aria-live="polite"></div>
   <div id="rank"></div>
 </header>
-<main id="app"></main>
-<nav id="nav"></nav>
+<main id="app" aria-label="Belay workspace"></main>
+<nav id="nav" aria-label="Main navigation"></nav>
 <div id="modal"><div class="sheet" id="sheet"></div></div>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.js"></script>
-<script src="cloud.js"></script>
+<script src="cloud.js?v=2"></script>
 <script>
 // Reference values are supplied by belay_reference after sign-in.
 let LV=[],TIER=[],COUNTRIES=[],STARTER_SKILLS=[],STARTER_WANT=[],STARTER_JOBS=[],RANKS=[],PERSONA="",PROMPTS={},BUCKETS={},DEFAULT_SETTINGS={};
@@ -290,86 +291,114 @@ function costCard(){
 }
 
 // ---------- views ----------
+let skillFilter='all',countryTableOpen=false;
+const targetJob=()=>S.jobs.find(j=>j.id===S.settings.targetJobId)||null;
+const needsPractice=s=>{const d=lastPractice(s.name);return s.want&&(!d||Date.now()-new Date(d).getTime()>14*864e5)};
+function pageTitle(title,desc,action=''){return `<div class="page-title"><div><h2>${title}</h2><p class="muted">${desc}</p></div>${action}</div>`}
+function careerTabs(){return `<div class="segments" aria-label="Career sections"><button data-tab="jobs" class="${tab==='jobs'?'selected':''}">Job goals</button><button data-tab="work" class="${tab==='work'?'selected':''}">Work record</button></div>`}
 function nav(){
-  const T=[["home","⌂","Climb"],["coach","✦","Coach"],["skills","◆","Skills"],["jobs","▲","Jobs"],["work","☰","Work"],["world","◎","Countries"]];
-  document.getElementById('nav').innerHTML=T.map(([k,i,l])=>`<button class="${tab===k?'on':''}" data-tab="${k}"><b>${i}</b>${l}</button>`).join('');
+  const active=['jobs','work'].includes(tab)?'jobs':['more','world','coach','settings'].includes(tab)?'more':tab;
+  const T=[['home','⌂','Overview'],['skills','◆','Skills'],['jobs','↗','Career'],['more','☰','More']];
+  document.getElementById('nav').innerHTML=T.map(([k,i,l])=>`<button class="${active===k?'on':''}" data-tab="${k}" ${active===k?'aria-current="page"':''}><b aria-hidden="true">${i}</b>${l}</button>`).join('');
 }
 function vHome(){
-  if(!S.skills.length&&!S.jobs.length)return `<div class="card"><h2>Start your career map</h2><p class="muted">Add your skills and the jobs you're aiming for. The app then works out what's holding you back and which skill to learn next for the biggest jump.</p><div class="row wrap"><button class="pri" data-act="starter">Load example starter set</button><button data-act="addSkill">Add a skill</button></div><p class="muted">The starter set is a mechanical / robotics engineering profile. Edit every level and salary to match your reality.</p></div>`;
-  const cur=bestUnlocked();const nx=nextSkills();const st=streak();const wm=weekMin();const goal=S.settings.weeklyGoal||300;
-  const ladder=[...S.jobs].sort((a,b)=>a.tier-b.tier||a.salary-b.salary);
-  const stale=S.skills.filter(s=>s.want&&(!lastPractice(s.name)||(Date.now()-new Date(lastPractice(s.name)))>14*864e5));
-  const practicedToday=S.log.some(l=>l.d===today());
-  let h='';
-  h+=`<div class="card cta"><div class="muted">${practicedToday?'Nice, you practised today. Keep the chain going.':'You haven\'t practised today. The people who climb are the ones who show up daily.'}</div>`;
-  if(nx[0]){const n=nx[0];h+=`<div class="big" style="margin:6px 0 2px">Next: ${esc(n.n)} → ${LV[n.l+1]}</div><div class="muted">${n.unlocks.length?`Unlocks ${n.unlocks.map(j=>esc(j.title)).join(', ')}`:'Biggest step towards your higher-tier jobs'}${n.raise?` · potential +${man(n.raise)}/yr`:''}</div><div class="row" style="margin-top:10px"><button data-act="practice" data-s="${esc(n.n)}" style="background:#fff;color:#2f5bea;border:none;font-weight:600">Log 30 min</button><button data-act="practiceCustom" data-s="${esc(n.n)}" style="background:transparent;color:#fff;border-color:#ffffff88">Other amount</button></div>`}
-  h+=`</div>`;
-  const mg=moneyGap();
-  if(mg)h+=`<div class="card money"><div class="muted">Money you're leaving on the table</div><div style="font-weight:700;font-size:18px;margin:2px 0">+${man(mg.gap)}/yr · ${yen(mg.gap/365)} every day</div><div class="muted">That's what <b>${esc(mg.job.title)}</b> pays above your current level. You're ${Math.round(mg.m.pct*100)}% there. Close these:</div><div>${mg.m.gaps.map(g=>`<span class="tag gap">${esc(g.n)} ${g.m}→${g.r}</span>`).join('')}</div></div>`;
-  const cd=S.coach.daily;
-  h+=`<div class="card"><div class="row sp"><h2 style="margin:0">✦ Coach: today's push</h2><button class="sm" data-act="coach" data-m="daily" ${busy.daily?'disabled':''}>${busy.daily?'Thinking…':(cd&&cd.d===today()?'Refresh':'Get it')}</button></div><div class="coachtxt" id="co_daily" style="margin-top:6px">${busy.daily?md(live.daily||'Thinking…'):(cd&&cd.d===today()?md(cd.text):`<span class="muted">Copy a prompt and feed your plan for today.</span>`)}</div></div>`;
-  const csH=costStats();
-  if(csH&&csH.avg){const keep=countryRows().base.net/12*(S.settings.fx||150)-csH.avg;h+=`<div class="card" data-tab="world" style="cursor:pointer"><div class="row sp"><h2 style="margin:0">This month's spending</h2><span class="muted">from Cost</span></div><div class="row sp" style="margin-top:4px"><div><div style="font-weight:700;font-size:18px">${yen(csH.cur.t)}</div><div class="muted">spent so far · average ${yen(csH.avg)}</div></div><div style="text-align:right"><div style="font-weight:700;font-size:18px;color:${keep>=0?'var(--good)':'var(--bad)'}">${yen(keep)}</div><div class="muted">you keep / month</div></div></div><div class="bar ${csH.cur.t<=csH.avg?'good':''}" style="margin-top:6px"><i style="width:${Math.min(100,csH.cur.t/csH.avg*100)}%"></i></div></div>`}
-  h+=`<div class="grid2"><div class="card"><div class="muted">Current level</div><div style="font-weight:700;font-size:16px">${cur?esc(cur.title):'No job unlocked yet'}</div><div class="muted">${cur?man(cur.salary)+'/yr · '+TIER[cur.tier]:`Reach ${UNLOCK*100}% match to unlock`}</div></div>
-  <div class="card"><div class="muted">Streak · this week</div><div style="font-weight:700;font-size:16px">${st} day${st===1?'':'s'} 🔥</div><div class="row"><div class="bar ${wm>=goal?'good':''}"><i style="width:${Math.min(100,wm/goal*100)}%"></i></div><span class="muted">${wm}/${goal}m</span></div></div></div>`;
-  h+=`<div class="card"><div class="row sp"><h2 style="margin:0">Last 4 weeks</h2><span class="muted">Don't leave a gap</span></div>${heat()}</div>`;
-  if(nx.length>1)h+=`<div class="card"><h2>Other high-value skills</h2>${nx.slice(1).map(n=>`<div class="item row sp"><div><b>${esc(n.n)}</b> <span class="muted">${LV[n.l]} → ${LV[n.l+1]}</span><div class="muted">${n.unlocks.length?'Unlocks '+n.unlocks.map(j=>esc(j.title)).join(', '):'Raises your match on higher-tier jobs'}</div></div><button class="sm" data-act="practice" data-s="${esc(n.n)}">+30m</button></div>`).join('')}</div>`;
-  h+=`<div class="card"><h2>Your ladder</h2><div class="muted" style="margin-bottom:6px">Locked jobs are below ${UNLOCK*100}% match. Tap one to see the gaps.</div>${ladder.map(j=>{const m=match(j);const ok=m.pct>=UNLOCK;return `<div class="item ${ok?'':'lock'}" data-act="editJob" data-id="${j.id}" style="cursor:pointer"><div class="row sp"><b>${ok?'✓':'🔒'} ${esc(j.title)}</b><span class="muted">${man(j.salary)}</span></div><div class="row"><span class="pill">${TIER[j.tier]}</span><div class="bar ${ok?'good':''}"><i style="width:${m.pct*100}%"></i></div><span class="muted">${Math.round(m.pct*100)}%</span></div></div>`}).join('')}</div>`;
-  if(stale.length)h+=`<div class="card"><h2>⚠ Skills you want but are neglecting</h2><div class="muted">No practice for 14+ days:</div>${stale.map(s=>`<span class="tag gap">${esc(s.name)}</span>`).join('')}</div>`;
+  const target=targetJob(),wm=weekMin(),goal=S.settings.weeklyGoal||300,st=streak();
+  const gap=target?match(target).gaps.sort((a,b)=>(b.r-b.m)-(a.r-a.m))[0]:null;
+  const fallback=nextSkills()[0]||S.skills.filter(s=>s.want&&s.level<5).map(s=>({n:s.name,l:s.level}))[0]||S.skills.filter(s=>s.level<5).map(s=>({n:s.name,l:s.level}))[0];
+  const action=gap?{n:gap.n,l:gap.m}:fallback;
+  let h=pageTitle('Your next step','Small, focused practice. Steady progress.');
+  if(!S.skills.length&&!S.jobs.length)h+=`<section class="card hero"><span class="eyebrow">START HERE</span><h2>Build your career map</h2><p>Add the skills you have and the jobs you want. Belay helps you choose what to practise next.</p><div class="row wrap"><button class="pri" data-act="addSkill">Add your first skill</button><button data-act="starter">Load example starter set</button></div><p class="muted">The example is a mechanical / robotics profile. Adjust its levels and salaries to match your experience.</p></section>`;
+  else if(action)h+=`<section class="card hero"><div class="row sp wrap"><span class="eyebrow">NEXT ACTION · 30 MIN</span><span class="pill">${S.log.some(l=>l.d===today())?'Practised today ✓':'Ready when you are'}</span></div><h2>${esc(action.n)}</h2><p>Complete one focused exercise in ${esc(action.n)}, then log your session here.</p><div class="muted">${esc(LV[action.l])} → ${esc(LV[Math.min(5,action.l+1)])}${target?' · Working towards '+esc(target.title):''}</div><div class="row wrap action-row"><button class="pri" data-act="practice" data-s="${esc(action.n)}">Log 30 min practice</button><button data-act="practiceCustom" data-s="${esc(action.n)}">Choose minutes</button></div></section>`;
+  else h+=`<section class="card hero"><span class="eyebrow">NEXT ACTION</span><h2>Choose your next challenge</h2><p>Add a skill or review the requirements of your next job goal.</p><button class="pri" data-tab="jobs">Explore job goals</button></section>`;
+  h+=`<div class="metrics"><section class="card metric"><span class="muted">Weekly practice</span><strong>${wm}<small> / ${goal} min</small></strong><div class="bar"><i style="width:${Math.min(100,wm/goal*100)}%"></i></div><button class="ghost" data-act="weekly">Adjust goal</button></section><section class="card metric"><span class="muted">Target readiness</span><strong>${target?Math.round(match(target).pct*100)+'%':'—'}</strong><button class="ghost" data-tab="jobs">${target?esc(target.title):'Choose a job goal'}</button></section><section class="card metric"><span class="muted">Practice streak</span><strong>${st}<small> ${st===1?'day':'days'}</small></strong><span class="muted">One session at a time</span></section></div>`;
+  h+=`<section class="card"><div class="row sp wrap"><h2>Practice history</h2><span class="muted">Last 28 days</span></div>${heat()}<p class="muted">Darker squares mean more practice.</p></section>`;
+  if(target)h+=targetCard(target,false);
+  const stale=S.skills.filter(needsPractice);
+  if(stale.length)h+=`<section class="card"><div class="row sp wrap"><h2>Worth revisiting</h2><button class="ghost" data-act="openStale">See ${stale.length} skills →</button></div><p class="muted">Skills you want to learn with no practice recorded in the last 14 days.</p><div>${stale.slice(0,4).map(s=>`<span class="tag">${esc(s.name)}</span>`).join('')}</div></section>`;
+  if(S.coach.daily?.text)h+=`<details class="card"><summary>Your latest coaching note <span class="muted">${esc(S.coach.daily.d)}</span></summary><div class="coachtxt">${md(S.coach.daily.text)}</div><button data-tab="coach">Open Coach</button></details>`;
   return h;
 }
 function vSkills(){
-  const cats={};S.skills.forEach(s=>{(cats[s.cat||'Other']=cats[s.cat||'Other']||[]).push(s)});
-  let h=`<div class="card"><div class="row sp"><h2 style="margin:0">Skills</h2><button class="pri sm" data-act="addSkill">+ Add</button></div><div class="muted">Tap the boxes to set your level. ★ = a skill you <i>want</i> to work with. A green dashed box is the level the next job above you needs.</div></div>`;
-  const need={};S.jobs.forEach(j=>{if(match(j).pct<UNLOCK)Object.entries(j.req).forEach(([n,r])=>{need[n.toLowerCase()]=Math.min(need[n.toLowerCase()]||9,r)})});
-  for(const [c,list] of Object.entries(cats)){
-    h+=`<div class="card"><h2>${esc(c)}</h2>${list.map(s=>{const t=need[s.name.toLowerCase()];const lp=lastPractice(s.name);const used=S.work.filter(w=>(w.skills||[]).some(x=>x.toLowerCase()===s.name.toLowerCase())).length;
-      return `<div class="item"><div class="row sp"><div class="row"><span class="star ${s.want?'on':''}" data-act="want" data-id="${s.id}">★</span><b data-act="editSkill" data-id="${s.id}" style="cursor:pointer">${esc(s.name)}</b></div><span class="muted">${LV[s.level]}</span></div>
-      <div class="row sp" style="margin-top:6px"><div class="dots">${[1,2,3,4,5].map(i=>`<i class="${i<=s.level?'on':''} ${t&&t>s.level&&i===t?'tg':''}" data-act="setLv" data-id="${s.id}" data-v="${i}"></i>`).join('')}</div><button class="sm" data-act="practice" data-s="${esc(s.name)}">+30m</button></div>
-      <div class="muted" style="margin-top:4px">${hrs(s.name)} h logged · ${lp?'Last practised '+lp:'Never practised'} · used in ${used} work item${used===1?'':'s'}</div></div>`}).join('')}</div>`;
+  const filtered=S.skills.filter(s=>skillFilter==='all'||(skillFilter==='wanted'?s.want:needsPractice(s)));
+  let h=pageTitle('Your skills','Choose a level, log your practice, and keep moving.',`<button class="pri" data-act="addSkill">+ Add skill</button>`);
+  h+=`<div class="segments filters" aria-label="Filter skills">${[['all','All',S.skills.length],['wanted','Want to learn',S.skills.filter(s=>s.want).length],['stale','Needs practice',S.skills.filter(needsPractice).length]].map(([k,l,n])=>`<button data-act="skillFilter" data-k="${k}" class="${skillFilter===k?'selected':''}" aria-pressed="${skillFilter===k}">${l} <span>${n}</span></button>`).join('')}</div>`;
+  if(!filtered.length)return h+`<section class="card empty"><h2>${S.skills.length?'No skills in this filter':'Start with one skill'}</h2><p class="muted">${S.skills.length?'Star a skill to mark it as something you want to learn.':'Add something you use at work or want to learn next.'}</p><button data-act="${S.skills.length?'skillFilter':'addSkill'}" data-k="all">${S.skills.length?'Show all skills':'Add a skill'}</button></section>`;
+  const cats={};for(const s of filtered)(cats[s.cat||'Other']??=[]).push(s);
+  for(const [cat,list] of Object.entries(cats)){
+    h+=`<h3 class="section-label">${esc(cat)} <span class="muted">${list.length}</span></h3>`;
+    h+=list.map(s=>`<section class="card skill-card"><div class="row sp"><div><h2>${esc(s.name)}</h2><span class="muted">${hrs(s.name)} h logged · ${lastPractice(s.name)?'Last practice '+esc(lastPractice(s.name)):'No practice yet'}</span></div><button class="star ${s.want?'on':''}" aria-label="Want to learn ${esc(s.name)}" aria-pressed="${!!s.want}" data-act="want" data-id="${s.id}">${s.want?'★':'☆'}</button></div><div class="level-picker" role="group" aria-label="Level for ${esc(s.name)}">${LV.map((label,i)=>`<button class="${i===s.level?'selected':''}" aria-pressed="${i===s.level}" data-act="setLv" data-id="${s.id}" data-v="${i}"><b>${i}</b><span>${esc(label)}</span></button>`).join('')}</div><div class="row sp wrap"><button class="sm" data-act="editSkill" data-id="${s.id}">Edit skill</button><div class="row"><button class="ghost" data-act="practiceCustom" data-s="${esc(s.name)}">Custom time</button><button class="pri sm" data-act="practice" data-s="${esc(s.name)}">+30 min</button></div></div></section>`).join('');
   }
   return h;
 }
-function vJobs(){
-  const js=[...S.jobs].sort((a,b)=>wantPct(b)-wantPct(a)||b.tier-a.tier);
-  let h=`<div class="card"><div class="row sp"><h2 style="margin:0">Job profiles</h2><button class="pri sm" data-act="addJob">+ Add</button></div><div class="muted">Sorted by how much each job uses the skills you ★ want. "Fit" = how ready you are.</div></div>`;
-  h+=js.map(j=>{const m=match(j);const w=wantPct(j);return `<div class="card" data-act="editJob" data-id="${j.id}" style="cursor:pointer"><div class="row sp"><b>${esc(j.title)}</b><span class="muted">${man(j.salary)}</span></div>
-  <div class="row wrap" style="margin:6px 0"><span class="pill">${TIER[j.tier]}</span><span class="pill ${w>=.5?'good':'warn'}">Wanted skills ${Math.round(w*100)}%</span><span class="pill ${m.pct>=UNLOCK?'good':''}">Fit ${Math.round(m.pct*100)}%</span></div>
-  <div>${m.have.map(g=>`<span class="tag ok">${esc(g.n)} ${g.r}</span>`).join('')}${m.gaps.map(g=>`<span class="tag gap">${esc(g.n)} ${g.m}→${g.r}</span>`).join('')}</div>${j.notes?`<div class="muted" style="margin-top:6px">${esc(j.notes)}</div>`:''}</div>`}).join('');
-  return h;
+function targetCard(j,editable=true){
+ const m=match(j),gaps=[...m.gaps].sort((a,b)=>(b.r-b.m)-(a.r-a.m)).slice(0,3);
+ return `<section class="card target-card"><span class="eyebrow">YOUR TARGET JOB</span><div class="row sp wrap"><h2>${esc(j.title)}</h2><strong>${Math.round(m.pct*100)}% ready</strong></div><div class="bar"><i style="width:${m.pct*100}%"></i></div><p class="muted">${esc(TIER[j.tier])} · estimated ${man(j.salary)}/year</p><h3>${gaps.length?'Focus on these gaps':'All listed skill requirements met'}</h3>${gaps.map(g=>`<div class="item row sp wrap"><span><b>${esc(g.n)}</b><br><span class="muted">${esc(LV[g.m])} → ${esc(LV[g.r])}</span></span><button class="sm" data-act="practiceCustom" data-s="${esc(g.n)}">Log practice</button></div>`).join('')}<div class="action-row"><button data-${editable?'act="editJob"':'tab="jobs"'} ${editable?'data-id="'+j.id+'"':''}>${editable?'Edit requirements':'View career goals'}</button></div></section>`;
 }
+function vJobs(){
+ const js=[...S.jobs].sort((a,b)=>wantPct(b)-wantPct(a)||b.tier-a.tier),target=targetJob();
+ let h=pageTitle('Career','Choose a goal. Close the gaps. Record your progress.',`<button class="pri" data-act="addJob">+ Add job</button>`)+careerTabs();
+ h+=`<section class="card"><label for="targetJob">Your focus</label><select id="targetJob"><option value="">Choose a target job</option>${js.map(j=>`<option value="${j.id}" ${j.id===target?.id?'selected':''}>${esc(j.title)}</option>`).join('')}</select><p class="muted">Your target shapes the next action on your Overview.</p></section>`;
+ if(target)h+=targetCard(target);
+ if(!js.length)return h+`<section class="card empty"><h2>What would you like to do next?</h2><p class="muted">Add a job profile and its required skills to build your career path.</p><button data-act="addJob">Add a job goal</button></section>`;
+ h+=`<h3 class="section-label">All job profiles <span class="muted">${js.length}</span></h3>`;
+ h+=js.map(j=>{const m=match(j);return `<details class="card job-details"><summary><span><strong>${esc(j.title)}</strong><span class="muted">${esc(TIER[j.tier])} · ${man(j.salary)}/yr</span></span><span class="pill ${m.pct>=UNLOCK?'good':''}">${Math.round(m.pct*100)}% fit</span></summary><div class="detail-body"><p class="muted">${Math.round(wantPct(j)*100)}% of required skills match your interests.</p><div>${m.gaps.map(g=>`<span class="tag gap">${esc(g.n)} ${g.m} → ${g.r}</span>`).join('')}${m.have.map(g=>`<span class="tag ok">${esc(g.n)} ✓</span>`).join('')}</div>${j.notes?`<p class="muted">${esc(j.notes)}</p>`:''}<div class="row wrap action-row"><button class="pri sm" data-act="setTarget" data-id="${j.id}" ${target?.id===j.id?'disabled':''}>${target?.id===j.id?'Current target':'Make my target'}</button><button class="sm" data-act="editJob" data-id="${j.id}">Edit profile</button></div></div></details>`}).join('');
+ return h;
+}
+function vMore(){
+ return pageTitle('More','Tools to support your next step.')+`<div class="menu-grid">${[['coach','✦','Coach','Save plans and advice from your AI assistant.'],['world','◎','Country comparisons','Compare earnings, living costs and money left over.'],['work','▤','Work record','Keep evidence of your projects and achievements.'],['settings','⚙','Settings & data','Account, weekly goal, migration and backups.']].map(([k,i,l,d])=>`<button class="card menu-card" data-tab="${k}"><span class="menu-icon" aria-hidden="true">${i}</span><span><strong>${l}</strong><span class="muted">${d}</span></span><span aria-hidden="true">→</span></button>`).join('')}</div>`;
+}
+function vSettings(){
+ const x=xpInfo();
+ return pageTitle('Settings & data','Your account, goals and saved records.')+`<section class="card"><h2>Account</h2><p>${esc(cloud.user?.email||'Signed in')}</p><div class="row wrap"><button id="refreshCloud">Refresh cloud data</button><button id="signOut">Sign out</button></div></section><section class="card"><h2>Practice goal</h2><p>${S.settings.weeklyGoal||300} minutes each week</p><button data-act="weekly">Change weekly goal</button></section><section class="card"><h2>Your data</h2><p class="muted">Records save to your cloud account. Export a copy before replacing data with an import.</p><div class="row wrap"><button data-act="download">Download backup</button><button data-act="export">Copy JSON</button><button data-act="import">Import JSON</button></div>${cloud.legacy?'<div class="migration-panel"><h3>Records found on this device</h3><p class="muted">Move the previous app\'s records into your account. This replaces your current cloud records after confirmation.</p><button class="pri" id="migrateLocal">Move device data to cloud</button></div>':''}</section><section class="card"><h2>Your journey</h2><div class="row sp"><b>${esc(x.name)}</b><span>${x.xp.toLocaleString()} XP</span></div><div class="bar action-row"><i style="width:${x.pct*100}%"></i></div><p class="muted">${x.next?x.need.toLocaleString()+' XP to '+esc(x.next):'Top rank reached'} · Practice, skill levels and work records build XP.</p></section>`;
+}
+
 function vWork(){
   const ws=[...S.work].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  let h=`<div class="card"><div class="row sp"><h2 style="margin:0">Work record</h2><button class="pri sm" data-act="addWork">+ Add</button></div><div class="muted">Projects and achievements. Each one is proof of a skill, and it's ready to copy into your CV.</div></div>`;
+  let h=pageTitle('Work record','Keep proof of what you can do.')+careerTabs()+`<div class="card"><div class="row sp"><h2 style="margin:0">Projects & achievements</h2><button class="pri sm" data-act="addWork">+ Add</button></div><div class="muted">Projects and achievements. Each one is proof of a skill, and it's ready to copy into your CV.</div></div>`;
   h+=ws.length?ws.map(w=>`<div class="card" data-act="editWork" data-id="${w.id}" style="cursor:pointer"><div class="row sp"><b>${esc(w.title)}</b><span class="muted">${esc(w.date||'')}</span></div><div class="muted">${esc(w.org||'')}</div>${w.desc?`<div style="margin-top:4px">${esc(w.desc)}</div>`:''}${w.impact?`<div style="margin-top:4px"><b>Impact:</b> ${esc(w.impact)}</div>`:''}<div style="margin-top:4px">${(w.skills||[]).map(s=>`<span class="tag">${esc(s)}</span>`).join('')}</div></div>`).join(''):`<div class="card muted">Nothing yet. Add your current role first.</div>`;
-  h+=`<div class="card"><h2>Backup</h2><div class="row wrap"><button class="sm" data-act="export">Copy all data (JSON)</button><button class="sm" data-act="import">Import JSON</button><button class="sm" data-act="weekly">Weekly goal</button></div></div>`;
   return h;
 }
+function selectedCountries(){
+  const available=new Set(allBase().map(c=>c[0]));
+  const saved=Array.isArray(S.settings.compareCountries)?S.settings.compareCountries:[];
+  const picked=[];
+  for(let i=0;i<2;i++)picked.push(saved[i]&&saved[i]!=='JP'&&available.has(saved[i])&&!picked.includes(saved[i])?saved[i]:'');
+  return picked;
+}
+function countryComparison(){
+  const {rows,fx}=countryRows(),selected=selectedCountries();
+  const choices=[...rows].filter(r=>r.c!=='JP').sort((a,b)=>a.n.localeCompare(b.n));
+  const cards=['JP',...selected.filter(Boolean)].map(c=>rows.find(r=>r.c===c));
+  return `<section class="card"><div class="row sp wrap"><h2>Your shortlist</h2><span class="pill">Japan + up to 2 countries</span></div><p class="muted">Choose places to compare. All amounts below are monthly estimates in yen.</p><div class="grid2">${selected.map((c,i)=>`<div><label for="compareCountry${i}">Compare country ${i+1}</label><select id="compareCountry${i}"><option value="">Choose a country</option>${choices.filter(r=>r.c!==selected[1-i]).map(r=>`<option value="${r.c}" ${r.c===c?'selected':''}>${esc(r.n)}</option>`).join('')}</select></div>`).join('')}</div></section><div class="comparison-grid">${cards.map(r=>`<section class="card country-card ${r.c==='JP'?'baseline':''}"><div class="row sp wrap"><h2>${flag(r.c)} ${esc(r.n)}</h2>${r.c==='JP'?'<span class="pill">Baseline</span>':''}</div><span class="muted">Money left / month</span><strong class="country-money ${r.real<0?'negative':''}">${yen(r.real/12*fx)}</strong><span class="muted">After living costs and inflation</span><p class="comparison-diff ${r.vs<0?'negative':''}">${r.c==='JP'?'Your comparison baseline':(r.vs>=0?'+':'')+yen(r.vs/12*fx)+' / month vs Japan'}</p><dl><div><dt>Take-home</dt><dd>${yen(r.net/12*fx)}</dd></div><div><dt>Living costs</dt><dd>${yen(r.l/12*fx)}</dd></div><div><dt>Effective tax + social</dt><dd>${Math.round(r.tax)}%</dd></div><div><dt>Inflation / year</dt><dd>${r.i}%</dd></div></dl><button data-act="editC" data-c="${r.c}">Edit ${esc(r.n)} figures</button>${r.edited?'<p class="muted">Using your edited assumptions</p>':''}</section>`).join('')}</div>`;
+}
+
 function vWorld(){
   const {rows,base,fx}=countryRows();const better=rows.filter(r=>r.vs>0).length;
-  const th=(k,l)=>`<th data-act="sortC" data-k="${k}">${l}${sortC===k?' ▾':''}</th>`;
-  return costCard()+`<div class="card"><h2>Where would you really earn more?</h2>
-  <div class="grid2"><div><label>Your gross salary in Japan (¥/yr)</label><input type="number" id="gross" value="${S.settings.gross}"></div><div><label>¥ per US$</label><input type="number" id="fx" value="${S.settings.fx}"></div></div>
+  const th=(k,l)=>`<th><button class="ghost" data-act="sortC" data-k="${k}">${l}${sortC===k?' ▾':''}</button></th>`;
+  return pageTitle('Country comparisons','Compare Japan with places you are considering.')+countryComparison()+`<div class="card"><h2>Your assumptions</h2>
+  <div class="grid2"><div><label for="gross">Your gross salary in Japan (¥/yr)</label><input type="number" id="gross" value="${S.settings.gross}"></div><div><label for="fx">¥ per US$</label><input type="number" id="fx" value="${S.settings.fx}"></div></div>
   <p class="muted">This assumes you'd earn at the same level relative to local engineers as you do in Japan. Then it takes off income tax and social insurance, a single person's living costs (rent, food, transport) and one year of inflation. <b>${better}</b> of ${rows.length} countries leave you more money than Japan (${yen(base.real/12*fx)}/month left over).</p></div>
-  <div class="card scroll"><table><thead><tr>${th('name','Country')}${th('surplus','Left / mo')}<th>vs JP/yr</th>${th('gross','Gross')}<th>Tax</th>${th('net','Take-home')}<th>Living</th><th>Infl.</th></tr></thead><tbody>
-  ${rows.map(r=>`<tr class="click ${r.c==='JP'?'me':''}" data-act="editC" data-c="${r.c}"><td>${flag(r.c)} ${esc(r.n)}${r.edited?' ✎':''}${r.ai?' <span class="pill" style="font-size:10px;padding:0 5px">AI</span>':''}</td><td style="font-weight:600;color:${r.real>=0?'var(--good)':'var(--bad)'}">${yen(r.real/12*fx)}</td><td style="color:${r.vs>=0?'var(--good)':'var(--bad)'}">${r.vs>=0?'+':''}${man(r.vs*fx)}</td><td>${man(r.gross*fx)}</td><td>${Math.round(r.tax)}%</td><td>${man(r.net*fx)}</td><td>${man(r.l*fx)}</td><td style="color:${r.i>6?'var(--bad)':'inherit'}">${r.i}%</td></tr>`).join('')}
-  </tbody></table></div>
+  <details class="card" id="countryTable" ${countryTableOpen?'open':''}><summary>All countries · full comparison</summary><div class="scroll"><table><thead><tr>${th('name','Country')}${th('surplus','Left / mo')}<th>vs JP/yr</th>${th('gross','Gross')}<th>Tax</th>${th('net','Take-home')}<th>Living</th><th>Infl.</th></tr></thead><tbody>
+  ${rows.map(r=>`<tr class="click ${r.c==='JP'?'me':''}" data-act="editC" data-c="${r.c}"><td><button class="ghost" data-act="editC" data-c="${r.c}">${flag(r.c)} ${esc(r.n)}</button>${r.edited?' ✎':''}${r.ai?' <span class="pill" style="font-size:10px;padding:0 5px">AI</span>':''}</td><td style="font-weight:600;color:${r.real>=0?'var(--good)':'var(--bad)'}">${yen(r.real/12*fx)}</td><td style="color:${r.vs>=0?'var(--good)':'var(--bad)'}">${r.vs>=0?'+':''}${man(r.vs*fx)}</td><td>${man(r.gross*fx)}</td><td>${Math.round(r.tax)}%</td><td>${man(r.net*fx)}</td><td>${man(r.l*fx)}</td><td style="color:${r.i>6?'var(--bad)':'inherit'}">${r.i}%</td></tr>`).join('')}
+  </tbody></table></div></details>
   <div class="card muted">These figures are starting estimates migrated from the original app, not verified current financial advice. Reference values are loaded from the database. Tap any country to put in figures you've researched yourself, such as a real job offer, the rent in your target city (for example Pune), or a tax calculator result. Edited countries show ✎. In Gulf countries tax is near 0%, but schooling and housing benefits vary a lot from offer to offer.</div>
-  ${(()=>{const miss=missingC();const tot=allBase().length+miss.length;return `<div class="card"><h2>Cover every country</h2><div class="muted">${allBase().length} of ${tot} countries have figures. ${miss.length?`You can feed estimates for the other ${miss.length} (marked AI). They're rough, so check any country you're seriously considering.`:'Every country is covered.'}</div>${miss.length?`<div class="row wrap" style="margin-top:8px"><button class="pri sm" data-act="estAll" ${estBusy?'disabled':''}>${estBusy?'Working…':'Estimate all '+miss.length}</button><select id="estSel" style="width:auto;flex:1">${miss.map(c=>`<option value="${c}">${flag(c)} ${esc(cname(c))}</option>`).sort().join('')}</select><button class="sm" data-act="estOne" ${estBusy?'disabled':''}>Estimate one</button></div><div class="muted" id="estProg" style="margin-top:6px"></div>`:''}${Object.keys(S.cAI).length?`<button class="sm ghost" data-act="estClear" style="margin-top:6px">Remove AI estimates</button>`:''}</div>`})()}`;
+  ${costCard()}${(()=>{const miss=missingC();const tot=allBase().length+miss.length;return `<div class="card"><h2>Cover every country</h2><div class="muted">${allBase().length} of ${tot} countries have figures. ${miss.length?`You can feed estimates for the other ${miss.length} (marked AI). They're rough, so check any country you're seriously considering.`:'Every country is covered.'}</div>${miss.length?`<div class="row wrap" style="margin-top:8px"><button class="pri sm" data-act="estAll" ${estBusy?'disabled':''}>${estBusy?'Working…':'Estimate all '+miss.length}</button><select id="estSel" style="width:auto;flex:1">${miss.map(c=>`<option value="${c}">${flag(c)} ${esc(cname(c))}</option>`).sort().join('')}</select><button class="sm" data-act="estOne" ${estBusy?'disabled':''}>Estimate one</button></div><div class="muted" id="estProg" style="margin-top:6px"></div>`:''}${Object.keys(S.cAI).length?`<button class="sm ghost" data-act="estClear" style="margin-top:6px">Remove AI estimates</button>`:''}</div>`})()}`;
 }
 function render(){
   if(!cloud.ready){renderGate();return;}
   nav();
-  renderRank();
-  const v={home:vHome,coach:vCoach,skills:vSkills,jobs:vJobs,work:vWork,world:vWorld}[tab]();
+  document.getElementById('rank').innerHTML='';
+  const v={home:vHome,coach:vCoach,skills:vSkills,jobs:vJobs,work:vWork,world:vWorld,more:vMore,settings:vSettings}[tab]();
   document.getElementById('app').innerHTML=v;
-  if(tab==='world'){['gross','fx'].forEach(id=>{const el=document.getElementById(id);el.onchange=()=>{S.settings[id]=+el.value||0;save();render()}});const cn=document.getElementById('costN');if(cn)cn.onchange=()=>{S.settings.costMonths=+cn.value;save();render()}}
+  bindAccountControls();
+  if(tab==='jobs')document.getElementById('targetJob').onchange=e=>{S.settings.targetJobId=e.target.value;save();render()};
+  if(tab==='world'){document.getElementById('countryTable').ontoggle=e=>{countryTableOpen=e.target.open};selectedCountries().forEach((_,i)=>{document.getElementById('compareCountry'+i).onchange=e=>{const selected=selectedCountries();selected[i]=e.target.value;S.settings.compareCountries=selected;save();render()}});['gross','fx'].forEach(id=>{const el=document.getElementById(id);el.onchange=()=>{S.settings[id]=+el.value||0;save();render()}});const cn=document.getElementById('costN');if(cn)cn.onchange=()=>{S.settings.costMonths=+cn.value;save();render()}}
 }
 
 // ---------- forms ----------
 function form(title,fields,vals,onSave,onDel){
   const sh=document.getElementById('sheet');
-  sh.innerHTML=`<div class="row sp"><h2 style="margin:0">${esc(title)}</h2><button class="ghost" id="fx_close">Close</button></div>`+fields.map(f=>`<label>${esc(f.l)}</label>`+(f.t==='select'?`<select id="f_${f.k}">${f.o.map((o,i)=>`<option value="${esc(f.ov?f.ov[i]:o)}" ${String(vals[f.k])===String(f.ov?f.ov[i]:o)?'selected':''}>${esc(o)}</option>`).join('')}</select>`:f.t==='area'?`<textarea id="f_${f.k}" rows="${f.r||3}" placeholder="${esc(f.p||'')}">${esc(vals[f.k]??'')}</textarea>`:`<input id="f_${f.k}" type="${f.t||'text'}" value="${esc(vals[f.k]??'')}" placeholder="${esc(f.p||'')}">`)).join('')+`<div class="row sp" style="margin-top:14px">${onDel?'<button id="fx_del" style="color:var(--bad)">Delete</button>':'<span></span>'}<button class="pri" id="fx_save">Save</button></div>`;
+  sh.innerHTML=`<div class="row sp"><h2 style="margin:0">${esc(title)}</h2><button class="ghost" id="fx_close">Close</button></div>`+fields.map(f=>`<label for="f_${f.k}">${esc(f.l)}</label>`+(f.t==='select'?`<select id="f_${f.k}">${f.o.map((o,i)=>`<option value="${esc(f.ov?f.ov[i]:o)}" ${String(vals[f.k])===String(f.ov?f.ov[i]:o)?'selected':''}>${esc(o)}</option>`).join('')}</select>`:f.t==='area'?`<textarea id="f_${f.k}" rows="${f.r||3}" placeholder="${esc(f.p||'')}">${esc(vals[f.k]??'')}</textarea>`:`<input id="f_${f.k}" type="${f.t||'text'}" value="${esc(vals[f.k]??'')}" placeholder="${esc(f.p||'')}">`)).join('')+`<div class="row sp" style="margin-top:14px">${onDel?'<button id="fx_del" style="color:var(--bad)">Delete</button>':'<span></span>'}<button class="pri" id="fx_save">Save</button></div>`;
   document.getElementById('modal').classList.add('on');
   const close=()=>document.getElementById('modal').classList.remove('on');
   document.getElementById('fx_close').onclick=close;
@@ -403,10 +432,14 @@ document.addEventListener('click',e=>{
   if(!cloud.ready)return;
   if(t.dataset.tab){tab=t.dataset.tab;render();scrollTo(0,0);return}
   const a=t.dataset.act,id=t.dataset.id;
+  if(a==='skillFilter'){skillFilter=t.dataset.k;render();return;}
+  if(a==='openStale'){skillFilter='stale';tab='skills';render();scrollTo(0,0);return;}
+  if(a==='setTarget'){S.settings.targetJobId=id;save();render();return;}
+  if(a==='download'){downloadState();return;}
   if(a==='starter'){S.skills=STARTER_SKILLS.map(([n,c,l])=>({id:uid(),name:n,cat:c,level:l,want:STARTER_WANT.includes(n)}));S.jobs=STARTER_JOBS.map(([title,tier,salary,req])=>({id:uid(),title,tier,salary,req,notes:'Starter estimate: edit the salary and skills to match real postings.'}));save();render()}
   if(a==='addSkill')skillForm();
   if(a==='editSkill')skillForm(S.skills.find(s=>s.id===id));
-  if(a==='setLv'){const s=S.skills.find(s=>s.id===id);const v=+t.dataset.v;const b=bestUnlocked(),r0=xpInfo().name,old=s.level;s.level=s.level===v?v-1:v;const af=bestUnlocked(),r1=xpInfo();save();render();
+  if(a==='setLv'){const s=S.skills.find(s=>s.id===id);const v=+t.dataset.v;const b=bestUnlocked(),r0=xpInfo().name,old=s.level;s.level=v;const af=bestUnlocked(),r1=xpInfo();save();render();
     if(af&&(!b||af.salary>b.salary))toast(`🔓 Unlocked: ${af.title} · ${man(af.salary)}/yr`,1);
     else if(r1.name!==r0&&s.level>old)toast(`⬆ Rank up: ${r1.name}!`,1);
     else if(s.level>old)toast(`${s.name} → ${LV[s.level]} · +${(s.level*s.level-old*old)*40} XP`)}
@@ -422,7 +455,7 @@ document.addEventListener('click',e=>{
   if(a==='editJob')jobForm(S.jobs.find(j=>j.id===id));
   if(a==='addWork')workForm();
   if(a==='editWork')workForm(S.work.find(w=>w.id===id));
-  if(a==='sortC'){sortC=t.dataset.k;render()}
+  if(a==='sortC'){sortC=t.dataset.k;countryTableOpen=true;render()}
   if(a==='editC'){const c=t.dataset.c;const base=allBase().find(x=>x[0]===c);const o=S.cOver[c]||{};
     form(flag(c)+' '+base[1],[{k:'g',l:'Typical engineer gross salary (US$/yr) for your level',t:'number'},{k:'t',l:'Effective tax + social insurance at that salary (%)',t:'number'},{k:'l',l:'Your yearly living cost there (US$, rent + food + transport)',t:'number'},{k:'i',l:'Inflation (%/yr)',t:'number'}],{g:o.g??base[2],t:o.t??base[3],l:o.l??base[4],i:o.i??base[5]},v=>{S.cOver[c]=v},S.cOver[c]?()=>{delete S.cOver[c]}:null);
     if(S.cOver[c])document.getElementById('fx_del').textContent='Reset to estimate'}
