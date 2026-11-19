@@ -99,3 +99,18 @@ test('career milestones and skill evidence survive cloud reload',async()=>{
  assert.equal(t.run('S.milestones[0].done'),true);
  assert.throws(()=>t.run("normalize({...blank(),milestones:[{title:'Broken',done:'yes'}]})"),/milestone/);
 });
+
+test('coach builds a job-gap-driven 4-week roadmap and counts logged practice',async()=>{
+ const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
+ t.run("S.skills=[{id:'cad',name:'CAD',level:1,want:true},{id:'python',name:'Python',level:2,want:true}];S.jobs=[{id:'robotics',title:'Robotics engineer',tier:3,salary:7000000,req:{CAD:4,Python:3}}];S.settings.targetJobId='robotics';tab='coach';render()");
+ t.click({act:'buildRoadmap'});
+ assert.equal(t.run('S.coach.practiceRoadmap.weeks.length'),4);
+ assert.equal(t.run('S.coach.practiceRoadmap.weeks[0].skill'),'CAD');
+ assert.match(t.els.app.innerHTML,/Week 1: CAD/);
+ t.click({act:'practice',s:'CAD'});
+ assert.equal(t.run('roadmapProgress(S.coach.practiceRoadmap,0).done'),30);
+ await t.run('flushSave()');t.run('S=blank()');await t.run('loadCloud()');
+ assert.equal(t.run('S.coach.practiceRoadmap.weeks[0].minutes'),120);
+ assert.equal(t.run('roadmapProgress(S.coach.practiceRoadmap,0).done'),30);
+ assert.throws(()=>t.run("normalize({...blank(),coach:{practiceRoadmap:{created:'bad',targetJobId:'',weeks:[]}}})"),/roadmap/);
+});
