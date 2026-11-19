@@ -6,6 +6,7 @@ function normalize(value){
   const d=JSON.parse(JSON.stringify(value));
   for(const key of ['skills','jobs','work','log'])if(!Array.isArray(d[key]))throw Error('Missing or invalid '+key+' array.');
   if(d.milestones!=null&&!Array.isArray(d.milestones))throw Error('Invalid milestones array.');
+  if(d.applications!=null&&!Array.isArray(d.applications))throw Error('Invalid applications array.');
   for(const key of ['settings','cOver','cAI','coach'])if(d[key]!=null&&(typeof d[key]!=='object'||Array.isArray(d[key])))throw Error('Invalid '+key+'.');
   const finite=(x)=>typeof x==='number'&&Number.isFinite(x);
   const requirements=r=>r&&typeof r==='object'&&!Array.isArray(r)&&Object.entries(r).every(([n,l])=>n&&finite(l)&&l>=1&&l<=5);
@@ -14,12 +15,13 @@ function normalize(value){
   if(d.work.some(w=>!w||typeof w.title!=='string'||(w.skills&&!Array.isArray(w.skills))))throw Error('Invalid work record.');
   if(d.log.some(l=>!l||typeof l.s!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(l.d)||!finite(l.m)||l.m<0))throw Error('Invalid practice record.');
   if((d.milestones||[]).some(m=>!m||typeof m.title!=='string'||!m.title.trim()||typeof m.done!=='boolean'||(m.jobId!=null&&typeof m.jobId!=='string')||(m.due&&!/^\d{4}-\d{2}-\d{2}$/.test(m.due))||(m.notes!=null&&typeof m.notes!=='string')))throw Error('Invalid career milestone.');
+  if((d.applications||[]).some(a=>!a||typeof a.title!=='string'||!a.title.trim()||!['Saved','Applied','Interview','Offer','Rejected','Withdrawn'].includes(a.status)||typeof a.company!=='string'||typeof a.location!=='string'||typeof a.url!=='string'||(a.url&&!/^https?:\/\//i.test(a.url))||(a.salary!=null&&(!finite(a.salary)||a.salary<0))||!requirements(a.req)||(a.appliedDate&&!/^\d{4}-\d{2}-\d{2}$/.test(a.appliedDate))||typeof a.notes!=='string'||typeof a.updated!=='string'))throw Error('Invalid job application.');
   if(d.coach?.practiceRoadmap){
     const p=d.coach.practiceRoadmap;
     if(!/^\d{4}-\d{2}-\d{2}$/.test(p.created||'')||!Number.isFinite(new Date(p.created+'T00:00:00').getTime())||typeof p.targetJobId!=='string'||!Array.isArray(p.weeks)||p.weeks.length!==4||p.weeks.some(w=>!w||typeof w.skill!=='string'||!w.skill.trim()||!Number.isInteger(w.minutes)||w.minutes<1||w.minutes>1440))throw Error('Invalid coaching roadmap.');
   }
   // Keep attribute IDs safe, including older imported records with missing IDs.
-  for(const key of ['skills','jobs','work','milestones']){const seen=new Set();for(const row of d[key]||[]){if(typeof row.id!=='string'||!/^[\w-]+$/.test(row.id)||seen.has(row.id))row.id=crypto.randomUUID();seen.add(row.id);}}
+  for(const key of ['skills','jobs','work','milestones','applications']){const seen=new Set();for(const row of d[key]||[]){if(typeof row.id!=='string'||!/^[\w-]+$/.test(row.id)||seen.has(row.id))row.id=crypto.randomUUID();seen.add(row.id);}}
   const b=blank();
   return {...b,...d,settings:{...b.settings,...d.settings},cOver:d.cOver||{},cAI:d.cAI||{},coach:d.coach||{}};
 }
