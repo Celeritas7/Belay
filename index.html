@@ -95,7 +95,7 @@ nav button{padding:4px 3px}
 <div id="modal"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.js"></script>
-<script src="cloud.js?v=5"></script>
+<script src="cloud.js?v=6"></script>
 <script>
 // Reference values are supplied by belay_reference after sign-in.
 let LV=[],TIER=[],COUNTRIES=[],STARTER_SKILLS=[],STARTER_WANT=[],STARTER_JOBS=[],RANKS=[],PERSONA="",PROMPTS={},BUCKETS={},DEFAULT_SETTINGS={};
@@ -110,7 +110,7 @@ let LV=[],TIER=[],COUNTRIES=[],STARTER_SKILLS=[],STARTER_WANT=[],STARTER_JOBS=[]
 const uid=()=>Math.random().toString(36).slice(2,10);
 const dateKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const today=()=>dateKey(new Date());
-const blank=()=>({skills:[],work:[],jobs:[],log:[],milestones:[],applications:[],settings:{...DEFAULT_SETTINGS},cOver:{},cAI:{},coach:{}});
+const blank=()=>({skills:[],work:[],jobs:[],log:[],milestones:[],applications:[],salaryHistory:[],settings:{...DEFAULT_SETTINGS},cOver:{},cAI:{},coach:{}});
 let S=blank(), tab="home", sortC="surplus", loaded=false;
 
 // ---------- logic ----------
@@ -338,7 +338,7 @@ const needsPractice=s=>{const d=lastPractice(s.name);return s.want&&(!d||Date.no
 function pageTitle(title,desc,action=''){return `<div class="page-title"><div><h2>${title}</h2><p class="muted">${desc}</p></div>${action}</div>`}
 function careerTabs(){return `<div class="segments" aria-label="Career sections"><button data-tab="jobs" class="${tab==='jobs'?'selected':''}">Job goals</button><button data-tab="applications" class="${tab==='applications'?'selected':''}">Applications</button><button data-tab="milestones" class="${tab==='milestones'?'selected':''}">Milestones</button><button data-tab="work" class="${tab==='work'?'selected':''}">Work record</button></div>`}
 function nav(){
-  const active=['jobs','work','milestones','applications'].includes(tab)?'jobs':['more','world','coach','settings'].includes(tab)?'more':tab;
+  const active=['jobs','work','milestones','applications'].includes(tab)?'jobs':['more','world','coach','settings','salary'].includes(tab)?'more':tab;
   const T=[['home','⌂','Overview'],['skills','◆','Skills'],['jobs','↗','Career'],['more','☰','More']];
   document.getElementById('nav').innerHTML=T.map(([k,i,l])=>`<button class="${active===k?'on':''}" data-tab="${k}" ${active===k?'aria-current="page"':''}><b aria-hidden="true">${i}</b>${l}</button>`).join('');
 }
@@ -402,7 +402,16 @@ function vMilestones(){
   return h+items.map(m=>{const j=S.jobs.find(j=>j.id===m.jobId);return `<section class="card milestone-card"><div class="row sp wrap"><div><h2>${esc(m.title)}</h2><span class="muted">${m.due?'Target '+esc(m.due):'No target date'}${j?' · '+esc(j.title):''}</span></div><span class="pill ${m.done?'good':''}">${m.done?'Completed':'Planned'}</span></div>${m.notes?`<p>${esc(m.notes)}</p>`:''}<div class="row wrap"><button class="sm" data-act="toggleMilestone" data-id="${m.id}">${m.done?'Mark incomplete':'Mark completed'}</button><button class="ghost" data-act="editMilestone" data-id="${m.id}">Edit</button></div></section>`}).join('');
 }
 function vMore(){
- return pageTitle('More','Tools to support your next step.')+`<div class="menu-grid">${[['coach','✦','Coach','Save plans and advice from your AI assistant.'],['world','◎','Country comparisons','Compare earnings, living costs and money left over.'],['work','▤','Work record','Keep evidence of your projects and achievements.'],['settings','⚙','Settings & data','Account, weekly goal, migration and backups.']].map(([k,i,l,d])=>`<button class="card menu-card" data-tab="${k}"><span class="menu-icon" aria-hidden="true">${i}</span><span><strong>${l}</strong><span class="muted">${d}</span></span><span aria-hidden="true">→</span></button>`).join('')}</div>`;
+ return pageTitle('More','Tools to support your next step.')+`<div class="menu-grid">${[['coach','✦','Coach','Save plans and advice from your AI assistant.'],['world','◎','Country comparisons','Compare earnings, living costs and money left over.'],['salary','▣','Salary history','Private salary slips and monthly pay history.'],['work','▤','Work record','Keep evidence of your projects and achievements.'],['settings','⚙','Settings & data','Account, weekly goal, migration and backups.']].map(([k,i,l,d])=>`<button class="card menu-card" data-tab="${k}"><span class="menu-icon" aria-hidden="true">${i}</span><span><strong>${l}</strong><span class="muted">${d}</span></span><span aria-hidden="true">→</span></button>`).join('')}</div>`;
+}
+const SALARY_CURRENCIES=['JPY','USD','INR','EUR','GBP'];
+const payAmount=(amount,currency)=>`${esc(currency)} ${Number(amount).toLocaleString(undefined,{maximumFractionDigits:2})}`;
+function vSalary(){
+  const rows=[...(S.salaryHistory||[])].sort((a,b)=>b.month.localeCompare(a.month)||b.updated.localeCompare(a.updated));
+  let h=pageTitle('Salary history','Keep monthly pay records and private payslip files separate from job-market estimates.',`<button class="pri" data-act="addSalary">+ Salary record</button>`);
+  h+=`<section class="card"><p class="muted">Amounts are entered by you, in the original currency. Belay does not convert currencies, infer deductions, or read the contents of uploaded slips. Files are stored in a private Supabase bucket only after its security setup is applied. Do not upload until that setup has been reviewed.</p></section>`;
+  if(!rows.length)return h+`<section class="card empty"><h2>No salary history yet</h2><p>Start with one monthly record. You can attach its PDF or image payslip after saving the record.</p><button data-act="addSalary">Add month</button></section>`;
+  return h+rows.map(r=>`<section class="card"><div class="row sp wrap"><div><h2>${esc(r.month)} · ${esc(r.employer)}</h2><p class="muted">Gross ${payAmount(r.gross,r.currency)} · Net ${payAmount(r.net,r.currency)}</p></div><button class="sm" data-act="editSalary" data-id="${r.id}">Edit</button></div>${r.notes?`<p>${esc(r.notes)}</p>`:''}${r.filePath?`<div class="row wrap"><span class="tag">Private slip: ${esc(r.fileName)}</span><button class="sm" data-act="downloadSalary" data-id="${r.id}">Download slip</button><button class="sm ghost" data-act="removeSalaryFile" data-id="${r.id}">Remove attachment</button></div>`:`<div><label for="salaryFile_${r.id}">Attach PDF or image (maximum 10 MB)</label><input id="salaryFile_${r.id}" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,application/pdf,image/png,image/jpeg,image/webp,image/heic"><button class="sm" data-act="uploadSalary" data-id="${r.id}">Upload private slip</button></div>`}</section>`).join('');
 }
 function vSettings(){
  const x=xpInfo();
@@ -447,7 +456,7 @@ function render(){
   if(!cloud.ready){renderGate();return;}
   nav();
   document.getElementById('rank').innerHTML='';
-  const v={home:vHome,coach:vCoach,skills:vSkills,jobs:vJobs,applications:vApplications,milestones:vMilestones,work:vWork,world:vWorld,more:vMore,settings:vSettings}[tab]();
+  const v={home:vHome,coach:vCoach,skills:vSkills,jobs:vJobs,applications:vApplications,milestones:vMilestones,work:vWork,world:vWorld,salary:vSalary,more:vMore,settings:vSettings}[tab]();
   document.getElementById('app').innerHTML=v;
   if(tab==='settings'){const account=document.querySelector('#app .card');if(account)account.insertAdjacentHTML('afterend',offlineShellCard());checkOfflineShell();}
   bindAccountControls();
@@ -483,6 +492,55 @@ function applicationForm(a){
     o.title=o.title.trim();o.company=o.company.trim();o.req=parseReq(o.req);o.updated=today();
     if(a)Object.assign(a,o);else S.applications.push({id:uid(),...o});
   },a?()=>{S.applications=S.applications.filter(x=>x!==a)}:null);
+}
+function salaryForm(entry){
+  form(entry?'Edit salary month':'Add salary month',[{k:'month',l:'Pay month',t:'month'},{k:'employer',l:'Employer'},{k:'currency',l:'Currency',t:'select',o:SALARY_CURRENCIES},{k:'gross',l:'Gross pay for this month',t:'number'},{k:'net',l:'Net pay received',t:'number'},{k:'notes',l:'Notes (bonus, reimbursements, deductions)',t:'area',r:3}],entry||{month:today().slice(0,7),currency:'JPY',gross:'',net:''},o=>{
+    if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(o.month)||!o.employer.trim()||!SALARY_CURRENCIES.includes(o.currency)||![o.gross,o.net].every(x=>typeof x==='number'&&Number.isFinite(x)&&x>=0)){toast('Enter month, employer, currency and non-negative gross/net pay.');return false;}
+    o.employer=o.employer.trim();o.notes=String(o.notes||'');o.updated=today();
+    if(entry)Object.assign(entry,o);else S.salaryHistory.push({id:uid(),...o});
+  },entry&&!entry.filePath?()=>{S.salaryHistory=S.salaryHistory.filter(r=>r!==entry)}:null);
+  if(entry?.filePath)document.getElementById('sheet').insertAdjacentHTML('beforeend','<p class="muted">Remove the attached file before deleting this salary record.</p>');
+}
+const SALARY_BUCKET='belay_salary_slips';
+let salaryBusy=false;
+function salaryFileInfo(file){
+  if(!file||!file.name||!Number.isFinite(file.size)||file.size<1||file.size>10*1024*1024)throw Error('Choose a nonempty PDF or image under 10 MB.');
+  const ext=String(file.name).split('.').pop().toLowerCase(),types={pdf:'application/pdf',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',heic:'image/heic'};
+  if(!types[ext]||(file.type&&file.type!==types[ext]))throw Error('Only PDF, PNG, JPG, WEBP and HEIC payslips are allowed.');
+  return {ext:ext==='jpeg'?'jpg':ext,type:types[ext],name:file.name.slice(-180)};
+}
+async function uploadSalaryFile(id){
+  if(salaryBusy||!cloud.ready||!cloud.user)return;
+  const row=S.salaryHistory.find(r=>r.id===id);if(!row||row.filePath)return;
+  const input=document.getElementById('salaryFile_'+id),file=input?.files?.[0];
+  let info;try{info=salaryFileInfo(file)}catch(e){toast(e.message);return;}
+  const owner=cloud.user.id,epoch=cloud.epoch;salaryBusy=true;
+  if(cloud.dirty&&!(await flushSave())){salaryBusy=false;toast('Save salary details to cloud before attaching a file.');return;}
+  if(!cloud.ready||cloud.user?.id!==owner||cloud.epoch!==epoch){salaryBusy=false;return;}
+  const path=owner+'/'+crypto.randomUUID()+'.'+info.ext;
+  try{
+    const {error}=await cloud.client.storage.from(SALARY_BUCKET).upload(path,file,{contentType:info.type,upsert:false});if(error)throw error;
+    if(cloud.user?.id!==owner||cloud.epoch!==epoch)throw Error('Account changed during upload. The private file may need administrator cleanup.');
+    row.filePath=path;row.fileName=info.name;row.fileType=info.type;row.fileSize=file.size;row.updated=today();save();
+    if(await flushSave()){toast('Private salary slip saved.');render();}else toast('File uploaded but record is not synced. Keep this page open and retry the cloud save.');
+  }catch(e){toast('Upload failed: '+e.message);}
+  finally{salaryBusy=false;}
+}
+async function downloadSalaryFile(id){
+  if(!cloud.ready||!cloud.user)return;
+  const row=S.salaryHistory.find(r=>r.id===id);if(!row?.filePath||!row.filePath.startsWith(cloud.user.id+'/'))return;
+  try{const {data,error}=await cloud.client.storage.from(SALARY_BUCKET).download(row.filePath);if(error)throw error;
+    const url=URL.createObjectURL(data),a=document.createElement('a');a.href=url;a.download=row.fileName||'payslip';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }catch(e){toast('Could not download private slip: '+e.message);}
+}
+async function removeSalaryFile(id){
+  if(salaryBusy||!cloud.ready||!cloud.user||cloud.dirty)return;
+  const row=S.salaryHistory.find(r=>r.id===id);if(!row?.filePath||!row.filePath.startsWith(cloud.user.id+'/'))return;
+  if(!confirm('Permanently delete this salary slip file? The salary month record will remain. Download a copy first if needed.'))return;
+  salaryBusy=true;
+  try{const {error}=await cloud.client.storage.from(SALARY_BUCKET).remove([row.filePath]);if(error)throw error;
+    delete row.filePath;delete row.fileName;delete row.fileType;delete row.fileSize;row.updated=today();save();const synced=await flushSave();render();toast(synced?'Attachment removed.':'Attachment deleted, but the record is not synced. Keep this page open and retry saving.');
+  }catch(e){toast('Could not remove attachment: '+e.message);}finally{salaryBusy=false;}
 }
 function workForm(w){
   form(w?'Edit work item':'New work item',[{k:'title',l:'What you did',p:'Designed welding fixture for truck frame'},{k:'org',l:'Company / project'},{k:'date',l:'Date',t:'date'},{k:'desc',l:'Details',t:'area'},{k:'impact',l:'Impact (numbers are best)',p:'Cut cycle time 18%'},{k:'skills',l:'Skills used (comma-separated)',p:'Creo Parametric, GD&T'}],w?{...w,skills:(w.skills||[]).join(', ')}:{date:today()},o=>{if(!o.title.trim())return false;o.skills=o.skills.split(',').map(x=>x.trim()).filter(Boolean);if(w)Object.assign(w,o);else S.work.push({id:uid(),...o})},w?()=>{S.work=S.work.filter(x=>x!==w)}:null);
@@ -538,6 +596,11 @@ document.addEventListener('click',e=>{
   if(a==='syncOfflinePractice'){try{const count=appendPendingPractice(cloud.user.id);if(count){save();render();flushSave()}else{clearSavedPractice(cloud.user.id,S);render();toast('Device practice is already synchronized.')}}catch(e){toast('Could not read device practice queue.');}}
   if(a==='addJob')jobForm();
   if(a==='addApplication')applicationForm();
+  if(a==='addSalary')salaryForm();
+  if(a==='editSalary')salaryForm(S.salaryHistory.find(r=>r.id===id));
+  if(a==='uploadSalary')uploadSalaryFile(id);
+  if(a==='downloadSalary')downloadSalaryFile(id);
+  if(a==='removeSalaryFile')removeSalaryFile(id);
   if(a==='editApplication')applicationForm(S.applications.find(x=>x.id===id));
   if(a==='addMilestone')milestoneForm();
   if(a==='editMilestone')milestoneForm(S.milestones.find(m=>m.id===id));

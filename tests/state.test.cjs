@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),vm=requir
 const root=path.resolve(__dirname,'..');
 const ref={LV:['None','Aware','Basic','Working','Strong','Expert'],TIER:['','Entry','Mid','Senior','Lead','Manager'],COUNTRIES:[['JP','Japan',36000,24,14600,2.1]],STARTER_SKILLS:[['Test skill','Design',2]],STARTER_WANT:['Test skill'],STARTER_JOBS:[['Test job',2,100,{'Test skill':2}]],RANKS:[[0,'Apprentice'],[1000,'Engineer']],PERSONA:'Test coach',PROMPTS:{daily:'Test prompt'},BUCKETS:{},settings:{gross:5500000,fx:157,weeklyGoal:300}};
 function setup(store=new Map()){
- const els={},listeners={};let record=null,fail=false,authCallback;
+ const els={},listeners={},storageObjects=new Map();let record=null,fail=false,authCallback;
  const element=id=>els[id]??=( {innerHTML:'',textContent:'',value:'',style:{},dataset:{},setAttribute(){},removeAttribute(){},classList:{add(){},remove(){},contains(){return false}},addEventListener(){},insertAdjacentHTML(){},click(){},querySelector(){return element('button')}});
  const doc={getElementById:element,addEventListener(n,f){listeners[n]=f},querySelector:element,activeElement:{tagName:'BODY'},createElement:element};
  const client={auth:{onAuthStateChange(f){authCallback=f},async getSession(){return {data:{session:null}}},async signOut(){authCallback('SIGNED_OUT',null);return {}}},from(table){return {select(){return this},eq(){return this},async single(){return {data:{data:ref}}},async maybeSingle(){return {data:record?structuredClone(record):null}}}},async rpc(name,args){
@@ -11,11 +11,16 @@ function setup(store=new Map()){
   if(args.p_version!==(record?.version||0))return {error:{message:'BELAY_CONFLICT: newer data'}};
   record={data:structuredClone(args.p_data),version:(record?.version||0)+1};return {data:{version:record.version}};
  }};
+ client.storage={from(bucket){assert.equal(bucket,'belay_salary_slips');return {
+  async upload(key,file,opts){if(fail)return {error:{message:'Upload unavailable'}};storageObjects.set(key,{file,opts});return {data:{path:key}}},
+  async download(key){return storageObjects.has(key)?{data:storageObjects.get(key).file}:{error:{message:'File missing'}}},
+  async remove(keys){for(const key of keys)storageObjects.delete(key);return {data:keys}}
+ }}};
  const context=vm.createContext({document:doc,window:{supabase:{createClient(){return client}},addEventListener(){}},localStorage:{getItem(k){return store.get(k)||null},setItem(k,v){store.set(k,v)},removeItem(k){store.delete(k)}},console,Intl,URL,Blob,crypto:require('node:crypto').webcrypto,structuredClone,setTimeout,clearTimeout,confirm:()=>true,navigator:{clipboard:{writeText:async()=>{}}},scrollTo(){},location:{origin:'https://example.invalid',pathname:'/',href:'https://example.invalid/',protocol:'https:'}});
  vm.runInContext(fs.readFileSync(path.join(root,'cloud.js'),'utf8'),context);
  vm.runInContext(fs.readFileSync(path.join(root,'index.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1].replace('boot();',''),context);
  const run=s=>vm.runInContext(s,context);
- return {click(dataset){listeners.click({target:{closest:()=>({dataset})},stopPropagation(){}})},run,ready:run('boot()'),els,store,record:()=>record,setRecord(r){record=r},fail(v){fail=v}};
+ return {click(dataset){listeners.click({target:{closest:()=>({dataset})},stopPropagation(){}})},run,ready:run('boot()'),els,store,storageObjects,record:()=>record,setRecord(r){record=r},fail(v){fail=v}};
 }
 test('database persistence, all views, cost, revision conflicts and recovery',async()=>{
  const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user',email:'test@example.invalid'}})");
@@ -221,7 +226,7 @@ test('version conflict never drops queued practice; recovery rebases on newer cl
 
 test('offline readiness requires current shell files and active service worker',async()=>{
  const t=setup();await t.ready;
- t.run("window.caches={};caches={keys:async()=>['belay-shell-v3'],open:async()=>({match:async()=>({ok:true})})};navigator.serviceWorker={getRegistration:async()=>({active:{}})}");
+ t.run("window.caches={};caches={keys:async()=>['belay-shell-v4'],open:async()=>({match:async()=>({ok:true})})};navigator.serviceWorker={getRegistration:async()=>({active:{}})}");
  let status=await t.run('offlineShellReport()');assert.equal(status.ready,true);assert.equal(status.files.length,7);
  t.run("caches.open=async()=>({match:async url=>url.href.includes('cloud.js')?null:{ok:true}})");
  status=await t.run('offlineShellReport()');assert.equal(status.ready,false);
@@ -230,18 +235,50 @@ test('offline readiness requires current shell files and active service worker',
  status=await t.run('offlineShellReport()');assert.equal(status.ready,false);
  assert.match(t.run('offlineShellCard()'),/Download readiness report/);
  const worker=fs.readFileSync(path.join(root,'sw.js'),'utf8');
- assert.match(worker,/belay-shell-v3/);assert.match(worker,/cloud\.js\?v=5/);
+ assert.match(worker,/belay-shell-v4/);assert.match(worker,/cloud\.js\?v=6/);
 });
 
 test('offline shell download retries missing files without removing cached files',async()=>{
  const t=setup();await t.ready;
- t.run("window.caches={};var storedShell=new Map();caches={keys:async()=>['belay-shell-v3'],open:async()=>({match:async url=>storedShell.get(String(url))||null,put:async (url,response)=>storedShell.set(String(url),response)})};navigator.serviceWorker={register:async()=>({}),getRegistration:async()=>({active:{}})};fetch=async url=>({ok:true,url})");
+ t.run("window.caches={};var storedShell=new Map();caches={keys:async()=>['belay-shell-v4'],open:async()=>({match:async url=>storedShell.get(String(url))||null,put:async (url,response)=>storedShell.set(String(url),response)})};navigator.serviceWorker={register:async()=>({}),getRegistration:async()=>({active:{}})};fetch=async url=>({ok:true,url})");
  await t.run('prepareOfflineShell()');
  assert.equal(t.run('storedShell.size'),7);
  assert.equal((await t.run('offlineShellReport()')).ready,true);
- t.run("storedShell.delete(new URL('./cloud.js?v=5',location.href).href)");
+ t.run("storedShell.delete(new URL('./cloud.js?v=6',location.href).href)");
  assert.equal((await t.run('offlineShellReport()')).ready,false);
  await t.run('prepareOfflineShell()');
  assert.equal((await t.run('offlineShellReport()')).ready,true);
  assert.equal(t.run('storedShell.size'),7);
+});
+
+test('salary history metadata saves, validates and reloads without affecting old accounts',async()=>{
+ const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
+ assert.equal(t.run('S.salaryHistory.length'),0);
+ t.run("tab='salary';render()");assert.match(t.els.app.innerHTML,/No salary history yet/);
+ t.click({act:'addSalary'});
+ t.run("document.getElementById('f_month').value='2026-10';document.getElementById('f_employer').value='Example Engineering';document.getElementById('f_currency').value='JPY';document.getElementById('f_gross').value='520000';document.getElementById('f_net').value='390000';document.getElementById('f_notes').value='Monthly base pay'");
+ t.els.fx_save.onclick();await t.run('flushSave()');
+ assert.equal(t.record().data.salaryHistory[0].month,'2026-10');
+ assert.equal(t.record().data.salaryHistory[0].net,390000);
+ assert.match(t.els.app.innerHTML,/JPY 520,000/);
+ t.run('S=blank()');await t.run('loadCloud()');assert.equal(t.run('S.salaryHistory.length'),1);
+ assert.throws(()=>t.run("normalize({...blank(),salaryHistory:[{month:'2026-13'}]})"),/salary history/);
+ assert.throws(()=>t.run("normalize({...blank(),salaryHistory:[{id:'s',month:'2026-10',employer:'x',currency:'JPY',gross:1,net:1,notes:'',updated:'2026-11-19',filePath:'../../other.pdf',fileName:'a',fileType:'application/pdf',fileSize:100}]})"),/salary history/);
+});
+
+test('private payslip upload follows saved salary record and supports explicit removal',async()=>{
+ const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
+ t.run("S.salaryHistory=[{id:'slip1',month:'2026-10',employer:'Example Engineering',currency:'JPY',gross:520000,net:390000,notes:'',updated:today()}];save()");
+ await t.run('flushSave()');t.run("tab='salary';render()");
+ t.run("document.getElementById('salaryFile_slip1').files=[{name:'october.pdf',type:'application/pdf',size:1234}]");
+ await t.run("uploadSalaryFile('slip1')");
+ assert.equal(t.storageObjects.size,1);
+ assert.equal(t.record().data.salaryHistory[0].fileName,'october.pdf');
+ assert.match(t.record().data.salaryHistory[0].filePath,/^test-user\/[\w-]+\.pdf$/);
+ assert.equal(t.storageObjects.values().next().value.opts.upsert,false);
+ assert.throws(()=>t.run("salaryFileInfo({name:'bad.exe',type:'application/octet-stream',size:100})"),/Only PDF/);
+ assert.throws(()=>t.run("salaryFileInfo({name:'too-big.pdf',type:'application/pdf',size:11000000})"),/10 MB/);
+ await t.run("removeSalaryFile('slip1')");
+ assert.equal(t.storageObjects.size,0);
+ assert.equal(t.run('S.salaryHistory[0].filePath'),undefined);
 });
