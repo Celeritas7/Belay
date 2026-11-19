@@ -226,7 +226,7 @@ test('version conflict never drops queued practice; recovery rebases on newer cl
 
 test('offline readiness requires current shell files and active service worker',async()=>{
  const t=setup();await t.ready;
- t.run("window.caches={};caches={keys:async()=>['belay-shell-v4'],open:async()=>({match:async()=>({ok:true})})};navigator.serviceWorker={getRegistration:async()=>({active:{}})}");
+ t.run("window.caches={};caches={keys:async()=>['belay-shell-v5'],open:async()=>({match:async()=>({ok:true})})};navigator.serviceWorker={getRegistration:async()=>({active:{}})}");
  let status=await t.run('offlineShellReport()');assert.equal(status.ready,true);assert.equal(status.files.length,7);
  t.run("caches.open=async()=>({match:async url=>url.href.includes('cloud.js')?null:{ok:true}})");
  status=await t.run('offlineShellReport()');assert.equal(status.ready,false);
@@ -235,16 +235,16 @@ test('offline readiness requires current shell files and active service worker',
  status=await t.run('offlineShellReport()');assert.equal(status.ready,false);
  assert.match(t.run('offlineShellCard()'),/Download readiness report/);
  const worker=fs.readFileSync(path.join(root,'sw.js'),'utf8');
- assert.match(worker,/belay-shell-v4/);assert.match(worker,/cloud\.js\?v=6/);
+ assert.match(worker,/belay-shell-v5/);assert.match(worker,/cloud\.js\?v=7/);
 });
 
 test('offline shell download retries missing files without removing cached files',async()=>{
  const t=setup();await t.ready;
- t.run("window.caches={};var storedShell=new Map();caches={keys:async()=>['belay-shell-v4'],open:async()=>({match:async url=>storedShell.get(String(url))||null,put:async (url,response)=>storedShell.set(String(url),response)})};navigator.serviceWorker={register:async()=>({}),getRegistration:async()=>({active:{}})};fetch=async url=>({ok:true,url})");
+ t.run("window.caches={};var storedShell=new Map();caches={keys:async()=>['belay-shell-v5'],open:async()=>({match:async url=>storedShell.get(String(url))||null,put:async (url,response)=>storedShell.set(String(url),response)})};navigator.serviceWorker={register:async()=>({}),getRegistration:async()=>({active:{}})};fetch=async url=>({ok:true,url})");
  await t.run('prepareOfflineShell()');
  assert.equal(t.run('storedShell.size'),7);
  assert.equal((await t.run('offlineShellReport()')).ready,true);
- t.run("storedShell.delete(new URL('./cloud.js?v=6',location.href).href)");
+ t.run("storedShell.delete(new URL('./cloud.js?v=7',location.href).href)");
  assert.equal((await t.run('offlineShellReport()')).ready,false);
  await t.run('prepareOfflineShell()');
  assert.equal((await t.run('offlineShellReport()')).ready,true);
@@ -281,4 +281,25 @@ test('private payslip upload follows saved salary record and supports explicit r
  await t.run("removeSalaryFile('slip1')");
  assert.equal(t.storageObjects.size,0);
  assert.equal(t.run('S.salaryHistory[0].filePath'),undefined);
+});
+
+test('subscriptions save, reload, sort renewals, and keep currency totals separate',async()=>{
+ const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
+ assert.equal(t.run('S.subscriptions.length'),0);
+ t.run("tab='subscriptions';render()");assert.match(t.els.app.innerHTML,/No subscriptions yet/);
+ t.click({act:'addSubscription'});
+ t.run("document.getElementById('f_name').value='CAD training';document.getElementById('f_provider').value='Learning platform';document.getElementById('f_category').value='Learning';document.getElementById('f_currency').value='JPY';document.getElementById('f_amount').value='12000';document.getElementById('f_interval').value='Yearly';document.getElementById('f_nextRenewal').value='2026-12-01';document.getElementById('f_autoRenew').value='1';document.getElementById('f_status').value='Active';document.getElementById('f_notes').value='Review before renewal'");
+ t.els.fx_save.onclick();await t.run('flushSave()');
+ assert.equal(t.record().data.subscriptions[0].amount,12000);
+ assert.equal(t.record().data.subscriptions[0].autoRenew,true);
+ assert.match(t.els.app.innerHTML,/JPY 1,000/);
+ t.run("S.subscriptions.push({id:'usd',name:'Software',provider:'Vendor',category:'Software',currency:'USD',amount:30,interval:'Monthly',nextRenewal:'2026-12-10',autoRenew:false,status:'Active',notes:'',updated:today()});save();render()");
+ assert.match(t.els.app.innerHTML,/USD 30/);
+ assert.doesNotMatch(t.els.app.innerHTML,/JPY 1,030/);
+ t.run("S.subscriptions[0].status='Cancelled';save();render()");
+ assert.doesNotMatch(t.els.app.innerHTML,/<span class="tag">JPY 1,000 \/ month<\/span>/);
+ await t.run('flushSave()');t.run('S=blank()');await t.run('loadCloud()');assert.equal(t.run('S.subscriptions.length'),2);
+ t.click({act:'editSubscription',id:'usd'});t.run("document.getElementById('f_amount').value='45'");t.els.fx_save.onclick();await t.run('flushSave()');assert.equal(t.record().data.subscriptions.find(s=>s.id==='usd').amount,45);
+ assert.throws(()=>t.run("normalize({...blank(),subscriptions:[{name:'Invalid',amount:-1}]})"),/subscription/);
+ assert.throws(()=>t.run("normalize({...blank(),subscriptions:[{id:'s',name:'X',provider:'P',category:'Software',currency:'JPY',amount:10,interval:'Monthly',nextRenewal:'2026-02-30',autoRenew:true,status:'Active',notes:'',updated:today()}]})"),/subscription/);
 });
