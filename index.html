@@ -95,7 +95,7 @@ nav button{padding:4px 3px}
 <div id="modal"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.js"></script>
-<script src="cloud.js?v=8"></script>
+<script src="cloud.js?v=9"></script>
 <script>
 // Reference values are supplied by belay_reference after sign-in.
 let LV=[],TIER=[],COUNTRIES=[],STARTER_SKILLS=[],STARTER_WANT=[],STARTER_JOBS=[],RANKS=[],PERSONA="",PROMPTS={},BUCKETS={},DEFAULT_SETTINGS={};
@@ -402,7 +402,8 @@ function vMilestones(){
   return h+items.map(m=>{const j=S.jobs.find(j=>j.id===m.jobId);return `<section class="card milestone-card"><div class="row sp wrap"><div><h2>${esc(m.title)}</h2><span class="muted">${m.due?'Target '+esc(m.due):'No target date'}${j?' · '+esc(j.title):''}</span></div><span class="pill ${m.done?'good':''}">${m.done?'Completed':'Planned'}</span></div>${m.notes?`<p>${esc(m.notes)}</p>`:''}<div class="row wrap"><button class="sm" data-act="toggleMilestone" data-id="${m.id}">${m.done?'Mark incomplete':'Mark completed'}</button><button class="ghost" data-act="editMilestone" data-id="${m.id}">Edit</button></div></section>`}).join('');
 }
 function vMore(){
- return pageTitle('More','Tools to support your next step.')+`<div class="menu-grid">${[['coach','✦','Coach','Save plans and advice from your AI assistant.'],['world','◎','Country comparisons','Compare earnings, living costs and money left over.'],['salary','▣','Salary history','Private salary slips and monthly pay history.'],['subscriptions','↻','Subscriptions','Track recurring costs and renewals.'],['careerExpenses','▦','Career investments','Track courses, certifications and career-related costs.'],['work','▤','Work record','Keep evidence of your projects and achievements.'],['settings','⚙','Settings & data','Account, weekly goal, migration and backups.']].map(([k,i,l,d])=>`<button class="card menu-card" data-tab="${k}"><span class="menu-icon" aria-hidden="true">${i}</span><span><strong>${l}</strong><span class="muted">${d}</span></span><span aria-hidden="true">→</span></button>`).join('')}</div>`;
+ const due=renewalAttention();
+ return pageTitle('More','Tools to support your next step.')+(due.length?`<section class="card"><div class="row sp wrap"><div><h2>Renewals to review</h2><p class="muted">${due.length} subscription${due.length===1?'':'s'} due within 30 days or past the recorded date. Check the provider before updating your record.</p></div><button class="sm pri" data-tab="subscriptions">Review renewals</button></div></section>`:'')+`<div class="menu-grid">${[['coach','✦','Coach','Save plans and advice from your AI assistant.'],['world','◎','Country comparisons','Compare earnings, living costs and money left over.'],['salary','▣','Salary history','Private salary slips and monthly pay history.'],['subscriptions','↻','Subscriptions','Track recurring costs and renewals.'],['careerExpenses','▦','Career investments','Track courses, certifications and career-related costs.'],['work','▤','Work record','Keep evidence of your projects and achievements.'],['settings','⚙','Settings & data','Account, weekly goal, migration and backups.']].map(([k,i,l,d])=>`<button class="card menu-card" data-tab="${k}"><span class="menu-icon" aria-hidden="true">${i}</span><span><strong>${l}</strong><span class="muted">${d}</span></span><span aria-hidden="true">→</span></button>`).join('')}</div>`;
 }
 const SALARY_CURRENCIES=['JPY','USD','INR','EUR','GBP'];
 const payAmount=(amount,currency)=>`${esc(currency)} ${Number(amount).toLocaleString(undefined,{maximumFractionDigits:2})}`;
@@ -412,13 +413,14 @@ const SUB_STATUSES=['Active','Paused','Cancelled'];
 function validCalendarDate(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;const d=new Date(value+'T00:00:00Z');return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===value;}
 function subscriptionMonthly(s){return s.amount/(s.interval==='Yearly'?12:s.interval==='Quarterly'?3:1)}
 function subscriptionRenewalDays(s){if(s.status!=='Active'||!s.nextRenewal)return null;const d=Date.parse(s.nextRenewal+'T00:00:00Z'),now=Date.parse(today()+'T00:00:00Z');return Math.round((d-now)/86400000)}
+function renewalAttention(){return (S.subscriptions||[]).filter(s=>{const days=subscriptionRenewalDays(s);return days!==null&&days<=30}).sort((a,b)=>a.nextRenewal.localeCompare(b.nextRenewal))}
 function vSubscriptions(){
   const rows=[...(S.subscriptions||[])].sort((a,b)=>(a.status==='Active'?0:1)-(b.status==='Active'?0:1)||(a.nextRenewal||'9999').localeCompare(b.nextRenewal||'9999')||a.name.localeCompare(b.name));
   let h=pageTitle('Subscriptions','Track professional recurring expenses, renewals and cancellation status.',`<button class="pri" data-act="addSubscription">+ Subscription</button>`);
   const totals={};for(const s of rows.filter(s=>s.status==='Active'))totals[s.currency]=(totals[s.currency]||0)+subscriptionMonthly(s);
   h+=`<section class="card"><h2>Active monthly equivalent</h2><p class="muted">Estimated from each billing interval; no currency conversion. Paused and cancelled entries are excluded. These records are not Cost Management transactions.</p>${Object.keys(totals).length?Object.keys(totals).sort().map(c=>`<span class="tag">${payAmount(totals[c],c)} / month</span>`).join(' '):'<p class="muted">No active subscriptions yet.</p>'}</section>`;
-  const upcoming=rows.filter(s=>{const days=subscriptionRenewalDays(s);return days!==null&&days<=30});
-  if(upcoming.length)h+=`<section class="card"><h2>Renewal attention</h2><p class="muted">Shown when you open Belay; no background notifications are sent.</p>${upcoming.map(s=>{const d=subscriptionRenewalDays(s);return `<div class="item"><b>${esc(s.name)}</b> · ${esc(s.nextRenewal)} · <span class="pill ${d<0?'':'good'}">${d<0?'Overdue / check billing':d===0?'Today':'In '+d+' days'}</span></div>`}).join('')}</section>`;
+  const upcoming=renewalAttention();
+  if(upcoming.length)h+=`<section class="card"><h2>Renewal attention</h2><p class="muted">Shown when you open Belay; no background notifications are sent. Dates are recorded expectations, not confirmation of payment or cancellation.</p>${upcoming.map(s=>{const d=subscriptionRenewalDays(s);return `<div class="item"><b>${esc(s.name)}</b> · ${esc(s.nextRenewal)} · <span class="pill ${d<0?'':'good'}">${d<0?'Past recorded date · verify':d===0?'Today':d<=7?'Soon · '+d+' day'+(d===1?'':'s'):'In '+d+' days'}</span> · ${s.autoRenew?'Auto-renew indicated':'Manual renewal / unknown'} <button class="sm ghost" data-act="editSubscription" data-id="${s.id}">Update date/status</button></div>`}).join('')}</section>`;
   if(!rows.length)return h+`<section class="card empty"><h2>No subscriptions yet</h2><p>Add software, learning platforms or memberships you pay for.</p><button data-act="addSubscription">Add subscription</button></section>`;
   return h+rows.map(s=>`<section class="card"><div class="row sp wrap"><div><h2>${esc(s.name)}</h2><p class="muted">${esc(s.category)} · ${esc(s.provider||'No provider')} · ${esc(s.interval)}</p></div><span class="pill ${s.status==='Active'?'good':''}">${esc(s.status)}</span></div><p><b>${payAmount(s.amount,s.currency)}</b> / ${esc(s.interval.toLowerCase().replace('ly',''))} · ${payAmount(subscriptionMonthly(s),s.currency)} / month equivalent</p><p class="muted">${s.nextRenewal?'Next renewal: '+esc(s.nextRenewal):'No renewal date recorded'} · ${s.autoRenew?'Auto-renew on':'Auto-renew off / unknown'}</p>${s.notes?`<p>${esc(s.notes)}</p>`:''}<button class="sm" data-act="editSubscription" data-id="${s.id}">Edit subscription</button></section>`).join('');
 }
@@ -437,8 +439,23 @@ function vSalary(){
   const rows=[...(S.salaryHistory||[])].sort((a,b)=>b.month.localeCompare(a.month)||b.updated.localeCompare(a.updated));
   let h=pageTitle('Salary history','Keep monthly pay records and private payslip files separate from job-market estimates.',`<button class="pri" data-act="addSalary">+ Salary record</button>`);
   h+=`<section class="card"><p class="muted">Amounts are entered by you, in the original currency. Belay does not convert currencies, infer deductions, or read the contents of uploaded slips. Files are stored in a private Supabase bucket only after its security setup is applied. Do not upload until that setup has been reviewed.</p></section>`;
+  h+=salaryAnalyticsCard();
   if(!rows.length)return h+`<section class="card empty"><h2>No salary history yet</h2><p>Start with one monthly record. You can attach its PDF or image payslip after saving the record.</p><button data-act="addSalary">Add month</button></section>`;
   return h+rows.map(r=>`<section class="card"><div class="row sp wrap"><div><h2>${esc(r.month)} · ${esc(r.employer)}</h2><p class="muted">Gross ${payAmount(r.gross,r.currency)} · Net ${payAmount(r.net,r.currency)}</p></div><button class="sm" data-act="editSalary" data-id="${r.id}">Edit</button></div>${r.notes?`<p>${esc(r.notes)}</p>`:''}${r.filePath?`<div class="row wrap"><span class="tag">Private slip: ${esc(r.fileName)}</span><button class="sm" data-act="downloadSalary" data-id="${r.id}">Download slip</button><button class="sm ghost" data-act="removeSalaryFile" data-id="${r.id}">Remove attachment</button></div>`:`<div><label for="salaryFile_${r.id}">Attach PDF or image (maximum 10 MB)</label><input id="salaryFile_${r.id}" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,application/pdf,image/png,image/jpeg,image/webp,image/heic"><button class="sm" data-act="uploadSalary" data-id="${r.id}">Upload private slip</button></div>`}</section>`).join('');
+}
+function salarySeries(){
+  const groups=new Map();for(const r of S.salaryHistory||[]){const key=JSON.stringify([r.employer.trim().toLocaleLowerCase(),r.currency]);if(!groups.has(key))groups.set(key,{employer:r.employer,currency:r.currency,months:new Map()});const g=groups.get(key),m=g.months.get(r.month)||{month:r.month,gross:0,net:0};m.gross+=r.gross;m.net+=r.net;g.months.set(r.month,m);}
+  return [...groups.values()].map(g=>({...g,points:[...g.months.values()].sort((a,b)=>a.month.localeCompare(b.month))})).sort((a,b)=>a.employer.localeCompare(b.employer)||a.currency.localeCompare(b.currency));
+}
+function salaryAnalyticsCard(){
+  const series=salarySeries();if(!series.length)return '<section class="card"><h2>Salary trends</h2><p class="muted">Add at least two months for the same employer and currency to compare changes.</p></section>';
+  let h='<section class="card"><h2>Salary trends</h2><p class="muted">Monthly amounts grouped by employer and currency; multiple slips for the same employer/month are added together. These are recorded pay amounts, not inflation-adjusted or annualized growth. Bonuses, partial months and deductions can change the trend.</p>';
+  for(const g of series){const a=g.points[0],b=g.points[g.points.length-1],diff=b.net-a.net,pct=a.net>0?` (${diff>=0?'+':''}${(diff/a.net*100).toFixed(1)}%)`:'';const max=Math.max(1,...g.points.map(p=>p.net));
+    h+=`<div class="item"><h3>${esc(g.employer)} · ${esc(g.currency)}</h3>${g.points.length>1?`<p class="muted">Net change ${esc(a.month)} → ${esc(b.month)}: <b>${diff>=0?'+':'−'}${payAmount(Math.abs(diff),g.currency)}</b>${pct}</p>`:'<p class="muted">One month recorded · add another month to compare.</p>'}`;
+    for(const p of g.points.slice(-12)){h+=`<div class="row sp wrap" style="margin-top:7px"><span>${esc(p.month)}</span><span class="muted">Gross ${payAmount(p.gross,g.currency)} · Net ${payAmount(p.net,g.currency)}</span></div><div class="bar" role="img" aria-label="${esc(p.month)} net salary ${payAmount(p.net,g.currency)}"><i style="width:${Math.max(0,Math.min(100,p.net/max*100))}%"></i></div>`;}
+    h+='</div>';
+  }
+  return h+'</section>';
 }
 function vSettings(){
  const x=xpInfo();
