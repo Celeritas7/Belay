@@ -114,3 +114,18 @@ test('coach builds a job-gap-driven 4-week roadmap and counts logged practice',a
  assert.equal(t.run('roadmapProgress(S.coach.practiceRoadmap,0).done'),30);
  assert.throws(()=>t.run("normalize({...blank(),coach:{practiceRoadmap:{created:'bad',targetJobId:'',weeks:[]}}})"),/roadmap/);
 });
+
+test('job applications persist posting details, skill fit and application status',async()=>{
+ const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
+ t.run("S.skills=[{id:'cad',name:'CAD',level:2,want:true}];tab='applications';render()");
+ t.click({act:'addApplication'});
+ t.run("document.getElementById('f_title').value='Design engineer';document.getElementById('f_company').value='Example Motors';document.getElementById('f_location').value='Saitama';document.getElementById('f_url').value='https://example.com/jobs/12';document.getElementById('f_salary').value='6500000';document.getElementById('f_req').value='CAD: 4';document.getElementById('f_status').value='Applied';document.getElementById('f_appliedDate').value='2026-11-19';document.getElementById('f_notes').value='Prepare portfolio'");
+ t.els.fx_save.onclick();await t.run('flushSave()');
+ assert.equal(t.record().data.applications[0].status,'Applied');
+ assert.equal(t.record().data.applications[0].salary,6500000);
+ assert.match(t.els.app.innerHTML,/50% skill fit/);
+ assert.match(t.els.app.innerHTML,/Open job posting/);
+ t.run('S=blank()');await t.run('loadCloud()');
+ assert.equal(t.run('S.applications[0].company'),'Example Motors');
+ assert.throws(()=>t.run("normalize({...blank(),applications:[{title:'Bad',status:'Unknown'}]})"),/application/);
+});
