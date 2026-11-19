@@ -13,7 +13,7 @@ Live app: https://celeritas7.github.io/Belay/
 - **Career → Milestones** tracks dated career goals, optional target-job links, notes and completion. The Skills screen lists linked work achievements as evidence when their skill tags match.
 - **More** contains Coach, country comparisons and Settings & data. Account, migration and backup controls are in Settings; save status and recovery remain visible on every screen.
 - **Coach** can now build a four-week practice roadmap from the selected target job's skill gaps and wanted skills. Each week focuses on one skill and targets 120 minutes; progress comes from practice sessions logged during that calendar week. Regenerating replaces the plan only after confirmation and never deletes practice history. The original AI copy/paste coaching remains available.
-- Country comparisons show Japan plus up to two selected destinations in monthly yen. The full table remains expandable. Figures are estimates, not current verified quotes.
+- Country comparisons show Japan plus up to two selected destinations in monthly yen. The full table remains expandable. Figures are estimates, not current verified quotes. **Phase 4** adds optional HTTPS evidence URLs, effective dates and notes to each user-edited country's assumptions, plus source-age flags and explicit unverified labels. Pasted AI country estimates can include the same evidence fields; an AI-provided citation is never treated as independently verified.
 
 Target job and country selections are saved in the existing Supabase settings JSON; no database migration is required for this UI update. Practice does not automatically change a skill level: users set their level explicitly.
 
@@ -25,6 +25,7 @@ Target job and country selections are saved in the existing Supabase settings JS
 - `public.belay_state`: one private JSON document per authenticated user. Its `data` contains `skills`, `jobs`, `work`, `log`, `settings`, `cOver`, `cAI`, `coach`, and optional Cost summaries. Versioned atomic saves prevent stale overwrites.
 - Phase 1 adds an optional `milestones` array to that existing private JSON record; no database schema change or separate table is needed. Old records load with an empty milestone list.
 - Phase 3 adds an optional `applications` array to that same private JSON record. Existing accounts still load without migration; application entries follow the existing per-account save and backup flow.
+- Phase 4 extends existing `cOver` and `cAI` entries with optional `source`, `asOf` and `notes` fields. Older entries still load, and no new table or migration is required. Imported evidence URLs must use HTTPS.
 - `public.belay_reference`: shared reference configuration (`id = 'default'`). Country figures, example skills/jobs, rank definitions, coaching prompts, labels and default settings are loaded from here. They are not bundled in the frontend. The initial figures were migrated as estimates, not freshly verified.
 - `public.belay_cost_summary()`: reads the signed-in user's yen expenses using existing Cost RLS; never writes Cost records.
 
@@ -45,6 +46,8 @@ Use the app forms or authenticated account JSON import. Administrators can updat
 The Coach and country-estimate screens provide prompts and accept pasted answers. Automatic AI generation is not configured; there is no client AI key or dependency on the Claude artifact runtime.
 
 The Phase 2 practice roadmap is calculated locally and stored under `belay_state.data.coach.practiceRoadmap`. It needs no additional tables, remote AI service, or migration.
+
+Country comparisons are scenarios: model gross pay is scaled from reference engineer pay, effective tax is adjusted heuristically, living costs are subtracted, and the surplus is divided by one year's inflation factor. This is neither a purchasing-power parity calculation nor a replacement for actual offers and local tax estimates. The manually entered USD/JPY rate is not live. Evidence labels describe the presence and age of user-entered data, not independent verification or quality of the underlying source.
 
 ## Verification
 
