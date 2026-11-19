@@ -1,6 +1,6 @@
 // Static app shell only: never cache Supabase auth, API responses or user records.
-const SHELL='belay-shell-v2';
-const FILES=['./','./index.html','./cloud.js?v=4','./ui.css?v=3','./manifest.webmanifest','./icons/belay-192.png','./icons/belay-512.png'];
+const SHELL='belay-shell-v3';
+const FILES=['./','./index.html','./cloud.js?v=5','./ui.css?v=3','./manifest.webmanifest','./icons/belay-192.png','./icons/belay-512.png'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(SHELL).then(cache=>cache.addAll(FILES)).then(()=>self.skipWaiting()));
 });

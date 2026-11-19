@@ -95,7 +95,7 @@ nav button{padding:4px 3px}
 <div id="modal"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.js"></script>
-<script src="cloud.js?v=4"></script>
+<script src="cloud.js?v=5"></script>
 <script>
 // Reference values are supplied by belay_reference after sign-in.
 let LV=[],TIER=[],COUNTRIES=[],STARTER_SKILLS=[],STARTER_WANT=[],STARTER_JOBS=[],RANKS=[],PERSONA="",PROMPTS={},BUCKETS={},DEFAULT_SETTINGS={};
@@ -409,6 +409,7 @@ function vSettings(){
  const offline=readOfflineProfile(),enabled=offline?.owner===cloud.user?.id,count=pendingPracticeCount(cloud.user?.id);
  return pageTitle('Settings & data','Your account, goals and saved records.')+`<section class="card"><h2>Account</h2><p>${esc(cloud.user?.email||'Signed in')}</p><div class="row wrap"><button id="refreshCloud">Refresh cloud data</button><button id="signOut">Sign out</button></div></section><section class="card"><h2>Offline practice on this device</h2><p class="muted">Opt in to keep only your account ID, skill names and unsynced practice sessions in this browser. You can record practice after reopening the app without internet. To sync, reconnect and sign into this same account. Do not clear website data before syncing.</p><div class="row wrap"><span class="pill ${enabled?'good':''}">${enabled?'Enabled':'Not enabled'}</span><span class="pill">${count<0?'Queue needs attention':count+' pending'}</span></div><div class="row wrap action-row">${enabled?'<button data-act="enableOfflinePractice">Refresh offline skill list</button><button data-act="disableOfflinePractice">Disable offline practice</button>':'<button data-act="enableOfflinePractice">Enable offline practice</button>'}<button data-act="syncOfflinePractice" ${count<=0?'disabled':''}>Sync pending practice</button></div></section><section class="card"><h2>Practice goal</h2><p>${S.settings.weeklyGoal||300} minutes each week</p><button data-act="weekly">Change weekly goal</button></section><section class="card"><h2>Your data</h2><p class="muted">Records save to your cloud account. Export a copy before replacing data with an import.</p><div class="row wrap"><button data-act="download">Download backup</button><button data-act="export">Copy JSON</button><button data-act="import">Import JSON</button></div>${cloud.legacy?'<div class="migration-panel"><h3>Records found on this device</h3><p class="muted">Move the previous app\'s records into your account. This replaces your current cloud records after confirmation.</p><button class="pri" id="migrateLocal">Move device data to cloud</button></div>':''}</section><section class="card"><h2>Your journey</h2><div class="row sp"><b>${esc(x.name)}</b><span>${x.xp.toLocaleString()} XP</span></div><div class="bar action-row"><i style="width:${x.pct*100}%"></i></div><p class="muted">${x.next?x.need.toLocaleString()+' XP to '+esc(x.next):'Top rank reached'} · Practice, skill levels and work records build XP.</p></section>`;
 }
+function offlineShellCard(){return `<section class="card" aria-label="Offline app readiness"><h2>App files for offline use</h2><p class="muted">Check or download the small Belay app shell before going offline. This enables the offline practice entry screen, not the full cloud dashboard. You do not need to clear website data or reinstall the app.</p><p id="offlineShellStatus" class="muted" role="status" aria-live="polite">Checking app files…</p><div class="row wrap"><button id="prepareOfflineShell" data-act="prepareOfflineShell">Save app files for offline</button><button data-act="checkOfflineShell">Check readiness</button><button data-act="downloadOfflineDiagnostics">Download readiness report</button></div></section>`}
 
 function vWork(){
   const ws=[...S.work].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
@@ -448,6 +449,7 @@ function render(){
   document.getElementById('rank').innerHTML='';
   const v={home:vHome,coach:vCoach,skills:vSkills,jobs:vJobs,applications:vApplications,milestones:vMilestones,work:vWork,world:vWorld,more:vMore,settings:vSettings}[tab]();
   document.getElementById('app').innerHTML=v;
+  if(tab==='settings'){const account=document.querySelector('#app .card');if(account)account.insertAdjacentHTML('afterend',offlineShellCard());checkOfflineShell();}
   bindAccountControls();
   if(tab==='jobs')document.getElementById('targetJob').onchange=e=>{S.settings.targetJobId=e.target.value;save();render()};
   if(tab==='world'){document.getElementById('countryTable').ontoggle=e=>{countryTableOpen=e.target.open};selectedCountries().forEach((_,i)=>{document.getElementById('compareCountry'+i).onchange=e=>{const selected=selectedCountries();selected[i]=e.target.value;S.settings.compareCountries=selected;save();render()}});['gross','fx'].forEach(id=>{const el=document.getElementById(id);el.onchange=()=>{S.settings[id]=+el.value||0;save();render()}});const cn=document.getElementById('costN');if(cn)cn.onchange=()=>{S.settings.costMonths=+cn.value;save();render()}}
@@ -529,6 +531,9 @@ document.addEventListener('click',e=>{
   if(a==='practice'){e.stopPropagation();logPractice(t.dataset.s,30)}
   if(a==='practiceCustom'){const s=t.dataset.s;form('Log practice: '+s,[{k:'m',l:'Minutes (1–1440)',t:'number'}],{m:60},o=>{if(!Number.isInteger(o.m)||o.m<1||o.m>1440){toast('Enter 1–1440 whole minutes.');return false;}if(!recordPractice(s,o.m))return false;toast(`+${o.m} min on ${s}`)})}
   if(a==='enableOfflinePractice')enableOfflinePractice();
+  if(a==='prepareOfflineShell')prepareOfflineShell();
+  if(a==='checkOfflineShell')checkOfflineShell();
+  if(a==='downloadOfflineDiagnostics')downloadOfflineDiagnostics();
   if(a==='disableOfflinePractice')disableOfflinePractice();
   if(a==='syncOfflinePractice'){try{const count=appendPendingPractice(cloud.user.id);if(count){save();render();flushSave()}else{clearSavedPractice(cloud.user.id,S);render();toast('Device practice is already synchronized.')}}catch(e){toast('Could not read device practice queue.');}}
   if(a==='addJob')jobForm();

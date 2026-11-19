@@ -1,6 +1,56 @@
 /* The browser holds working data in memory. Only the auth session persists locally. */
 const cloud={client:null,user:null,ready:false,version:0,dirty:false,saving:null,error:'',conflict:false,epoch:0,change:0,timer:null,loading:false,legacy:null};
 function setSave(text){document.getElementById('saveState').textContent=text;}
+const OFFLINE_SHELL='belay-shell-v3',OFFLINE_FILES=['./','./index.html','./cloud.js?v=5','./ui.css?v=3','./manifest.webmanifest','./icons/belay-192.png','./icons/belay-512.png'];
+let shellBusy=false;
+async function offlineShellReport(){
+  const report={generatedAt:new Date().toISOString(),online:navigator.onLine!==false,serviceWorkerSupported:'serviceWorker' in navigator,cacheSupported:'caches' in window,files:[],ready:false};
+  if(!report.cacheSupported)return report;
+  const keys=await caches.keys(),present=keys.includes(OFFLINE_SHELL);
+  const cache=present?await caches.open(OFFLINE_SHELL):null;
+  for(const file of OFFLINE_FILES){const hit=cache?await cache.match(new URL(file,location.href)):null;report.files.push({file,cached:!!hit});}
+  if(report.serviceWorkerSupported){const registration=await navigator.serviceWorker.getRegistration('./');report.serviceWorkerActive=!!registration?.active;}
+  report.ready=report.files.every(f=>f.cached)&&report.serviceWorkerActive===true;
+  return report;
+}
+function displayOfflineShell(report,message=''){
+  const el=document.getElementById('offlineShellStatus');if(!el)return;
+  if(report.error){el.textContent=report.error;return;}
+  const count=report.files.filter(f=>f.cached).length;
+  el.textContent=(report.ready?'Ready for offline practice entry':report.cacheSupported?'App files not fully ready':'Offline caching unavailable')+` · ${count}/${OFFLINE_FILES.length} files cached`+(message?' · '+message:'')+'. Full account data still requires internet.';
+}
+async function checkOfflineShell(){
+  const el=document.getElementById('offlineShellStatus');if(el)el.textContent='Checking cached app files…';
+  try{const report=await offlineShellReport();displayOfflineShell(report);return report;}catch(e){displayOfflineShell({error:'Could not check app files: '+e.message});return null;}
+}
+async function prepareOfflineShell(){
+  if(shellBusy)return;
+  if(navigator.onLine===false){toast('Reconnect to download the app files.');return;}
+  if(!('caches' in window)||!('serviceWorker' in navigator)){toast('Offline app files are not supported in this browser.');return;}
+  shellBusy=true;
+  const button=document.getElementById('prepareOfflineShell');if(button)button.disabled=true;
+  try{
+    await navigator.serviceWorker.register('./sw.js');
+    const cache=await caches.open(OFFLINE_SHELL);let completed=0;
+    for(const file of OFFLINE_FILES){
+      const url=new URL(file,location.href),response=await fetch(url.href,{cache:'reload'});
+      if(!response.ok)throw Error('Could not download '+file+' (HTTP '+response.status+').');
+      await cache.put(url.href,response);completed++;
+      const el=document.getElementById('offlineShellStatus');if(el)el.textContent=`Saving app files: ${completed}/${OFFLINE_FILES.length}. Existing cached files are preserved.`;
+    }
+    const report=await offlineShellReport();displayOfflineShell(report,report.ready?'You can test airplane mode now':'Reopen while online once to activate the app shell');
+  }catch(e){const report=await offlineShellReport().catch(()=>null);displayOfflineShell(report||{error:e.message},'Download interrupted: '+e.message+'. Retry to keep completed files.');}
+  finally{shellBusy=false;const button=document.getElementById('prepareOfflineShell');if(button)button.disabled=false;}
+}
+async function downloadOfflineDiagnostics(){
+  try{
+    const shell=await offlineShellReport();
+    const profile=readOfflineProfile(),owner=cloud.user?.id||profile?.owner;
+    const report={...shell,installedMode:window.matchMedia?.('(display-mode: standalone)').matches||!!navigator.standalone,offlinePracticeEnabled:!!profile&&profile.owner===owner,pendingPractice:pendingPracticeCount(owner),cloudLoaded:cloud.ready,accountDataOffline:false};
+    const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'}));
+    const a=document.createElement('a');a.href=url;a.download='belay-offline-readiness-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }catch(e){toast('Could not generate the readiness report: '+e.message);}
+}
 const OFFLINE_PROFILE='belay-offline-practice-profile-v1',OUTBOX_PREFIX='belay-offline-practice-v1:';
 function readOfflineProfile(){
   try{const p=JSON.parse(localStorage.getItem(OFFLINE_PROFILE)||'null');return p&&typeof p.owner==='string'&&/^[\w-]+$/.test(p.owner)&&Array.isArray(p.skills)&&p.skills.every(s=>typeof s==='string'&&s.trim())?p:null;}catch(e){return null;}
