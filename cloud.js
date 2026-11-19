@@ -1,11 +1,79 @@
 /* The browser holds working data in memory. Only the auth session persists locally. */
 const cloud={client:null,user:null,ready:false,version:0,dirty:false,saving:null,error:'',conflict:false,epoch:0,change:0,timer:null,loading:false,legacy:null};
 function setSave(text){document.getElementById('saveState').textContent=text;}
+const OFFLINE_PROFILE='belay-offline-practice-profile-v1',OUTBOX_PREFIX='belay-offline-practice-v1:';
+function readOfflineProfile(){
+  try{const p=JSON.parse(localStorage.getItem(OFFLINE_PROFILE)||'null');return p&&typeof p.owner==='string'&&/^[\w-]+$/.test(p.owner)&&Array.isArray(p.skills)&&p.skills.every(s=>typeof s==='string'&&s.trim())?p:null;}catch(e){return null;}
+}
+function readPracticeQueue(owner){
+  if(!owner||!/^[\w-]+$/.test(owner))throw Error('Invalid offline account.');
+  const raw=localStorage.getItem(OUTBOX_PREFIX+owner);
+  if(!raw)return [];
+  const data=JSON.parse(raw);
+  if(!Array.isArray(data)||data.some(l=>!l||typeof l.id!=='string'||!/^[\w-]+$/.test(l.id)||typeof l.s!=='string'||!l.s.trim()||!/^\d{4}-\d{2}-\d{2}$/.test(l.d)||!Number.isInteger(l.m)||l.m<1||l.m>1440))throw Error('Offline practice queue is invalid. Export the stored data before changing it.');
+  return data;
+}
+function queuePractice(owner,entry){
+  const items=readPracticeQueue(owner);
+  items.push(entry);
+  localStorage.setItem(OUTBOX_PREFIX+owner,JSON.stringify(items)); // Write before updating in-memory state.
+}
+function pendingPracticeCount(owner){try{return owner?readPracticeQueue(owner).length:0}catch(e){return -1}}
+function appendPendingPractice(owner){
+  if(!owner||owner!==cloud.user?.id)return 0;
+  const entries=readPracticeQueue(owner),have=new Set(S.log.map(l=>l.id).filter(Boolean));
+  let added=0;for(const entry of entries)if(!have.has(entry.id)){S.log.push({...entry});have.add(entry.id);added++}
+  return added;
+}
+function clearSavedPractice(owner,payload){
+  if(!owner)return;
+  const saved=new Set(payload.log.map(l=>l.id).filter(Boolean));
+  if(!saved.size)return;
+  const existing=readPracticeQueue(owner);
+  const remaining=existing.filter(l=>!saved.has(l.id));
+  if(remaining.length!==existing.length)localStorage.setItem(OUTBOX_PREFIX+owner,JSON.stringify(remaining));
+}
+function recordPractice(s,m){
+  if(!Number.isInteger(m)||m<1||m>1440||typeof s!=='string'||!s.trim()||!cloud.ready||!cloud.user)return false;
+  const owner=cloud.user.id,entry={id:crypto.randomUUID(),d:today(),s,m};
+  const profile=readOfflineProfile();
+  if(profile?.owner===owner){
+    try{queuePractice(owner,entry)}catch(e){toast('Could not save practice on this device. Storage may be full.');cloud.error=e.message;notice();return false;}
+  }
+  S.log.push(entry);save();return true;
+}
+function enableOfflinePractice(){
+  if(!cloud.ready||!cloud.user)return;
+  try{
+    const previous=readOfflineProfile();if(previous&&previous.owner!==cloud.user.id&&pendingPracticeCount(previous.owner)!==0){toast('The previous account has pending device practice. Sign into that account and sync first.');return;}
+    const profile={owner:cloud.user.id,email:cloud.user.email||'',skills:[...new Set(S.skills.map(s=>s.name).filter(Boolean))],updated:today()};
+    localStorage.setItem(OFFLINE_PROFILE,JSON.stringify(profile));render();notice();toast('Offline practice enabled for this device.');
+  }catch(e){toast('Device storage is unavailable; offline practice was not enabled.');}
+}
+function disableOfflinePractice(){
+  if(!cloud.user)return;
+  const count=pendingPracticeCount(cloud.user.id);
+  if(count!==0){toast('Sync pending practice before disabling offline mode.');return;}
+  try{localStorage.removeItem(OFFLINE_PROFILE);render();notice();}catch(e){toast('Could not update device storage.');}
+}
+function renderOfflinePracticeGate(){
+  const profile=readOfflineProfile();if(!profile||navigator.onLine!==false||cloud.user&&cloud.user.id!==profile.owner)return false;
+  let queue=[];try{queue=readPracticeQueue(profile.owner)}catch(e){document.getElementById('app').innerHTML=`<section class="card"><h2>Offline practice needs attention</h2><p>${esc(e.message)}</p><p>Reconnect to review your device data. Existing queued entries have not been removed.</p></section>`;return true;}
+  const options=profile.skills.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
+  document.getElementById('app').innerHTML=`<section class="card"><h2>Practice offline</h2><p class="muted">For ${esc(profile.email||'your last enabled account')} on this device. Entries stay on this device until you sign into the same account and sync. This screen does not load cloud records.</p><p><b>${queue.length} pending practice ${queue.length===1?'entry':'entries'}</b></p><label for="offlineSkill">Skill</label><select id="offlineSkill">${options}</select><label for="offlineMinutes">Minutes (1–1440)</label><input id="offlineMinutes" type="number" min="1" max="1440" step="1" value="30"><button class="pri" id="saveOfflinePractice" ${options?'':'disabled'} style="margin-top:12px">Save practice on device</button><p class="muted">Keep your browser data. When online, reload Belay and sign into this account to synchronize.</p></section>`;
+  document.getElementById('saveOfflinePractice').onclick=()=>{
+    const m=Number(document.getElementById('offlineMinutes').value),s=document.getElementById('offlineSkill').value;
+    if(!Number.isInteger(m)||m<1||m>1440||!profile.skills.includes(s)){toast('Choose a skill and 1–1440 whole minutes.');return;}
+    try{queuePractice(profile.owner,{id:crypto.randomUUID(),d:today(),s,m});renderOfflinePracticeGate();toast('Practice kept on this device.');showConnection();}catch(e){toast('Device storage is unavailable. Practice was not recorded.');}
+  };
+  return true;
+}
 function showConnection(){
   const el=document.getElementById('connectionState');if(!el)return;
   const offline=navigator.onLine===false;
   el.className=offline?'offline':'';
-  el.textContent=offline?(cloud.dirty?'Offline · unsaved changes are only in this open tab. Download a backup before closing.':'Offline · sign-in and cloud data need internet.'):(cloud.dirty?'Online · changes awaiting cloud save':'Online · cloud sync available');
+  const owner=cloud.user?.id||readOfflineProfile()?.owner,count=pendingPracticeCount(owner),queued=count>0?` · ${count} device practice pending`:count<0?' · device queue needs attention':'';
+  el.textContent=offline?(cloud.dirty?'Offline · other unsaved changes are only in this open tab':'Offline · account data needs internet'):(cloud.dirty?'Online · changes awaiting cloud save':'Online · cloud sync available');el.textContent+=queued;
 }
 function normalize(value){
   if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Expected a Belay data object.');
@@ -45,8 +113,9 @@ function applyReference(data){
 function notice(){
   showConnection();
   const el=document.getElementById('syncNotice');
-  el.innerHTML=cloud.error?`<div class="card" style="border-color:var(--bad)"><b>Changes are not saved</b><p>${esc(cloud.error)}</p><button id="retryCloud">Retry save</button> <button id="exportCloud">Download my changes</button> <button id="reloadCloud">Load cloud version</button></div>`:'';
+  el.innerHTML=cloud.error?`<div class="card" style="border-color:var(--bad)"><b>Changes are not saved</b><p>${esc(cloud.error)}</p><button id="retryCloud">Retry save</button> <button id="exportCloud">Download my changes</button> <button id="reloadCloud">Load cloud version</button>${cloud.conflict&&pendingPracticeCount(cloud.user?.id)>0?' <button id="rebasePractice">Recover device practice from latest cloud data</button>':''}</div>`:'';
   if(cloud.error){document.getElementById('retryCloud').onclick=()=>flushSave();document.getElementById('exportCloud').onclick=downloadState;document.getElementById('reloadCloud').onclick=()=>{if(!cloud.dirty||confirm('Discard unsaved changes and load the cloud version? Download your changes first if needed.')){cloud.dirty=false;cloud.conflict=false;cloud.error='';loadCloud();}};}
+  const rebase=document.getElementById('rebasePractice');if(rebase)rebase.onclick=()=>{if(!confirm('Load the latest cloud data and reapply only queued practice? Other unsaved edits will be discarded. Download your changes first if needed.'))return;cloud.dirty=false;cloud.conflict=false;cloud.error='';loadCloud();};
   if(cloud.ready){
     document.getElementById('account').innerHTML=`<button class="ghost sm" data-tab="settings">Settings${cloud.legacy?' · Device records found':''}</button>`;
     bindAccountControls();
@@ -79,7 +148,9 @@ async function flushSave(){
         const {data,error}=await cloud.client.rpc('belay_save_state',{p_data:payload,p_version:cloud.version});
         if(error)throw error;
         if(cloud.epoch!==epoch||cloud.user?.id!==owner)return false;
-        cloud.version=data.version;cloud.dirty=cloud.change!==change;cloud.error='';notice();
+        cloud.version=data.version;cloud.dirty=cloud.change!==change;cloud.error='';
+        try{clearSavedPractice(owner,payload)}catch(e){cloud.error='Cloud saved, but could not clean up the device practice queue. It will be checked again next time.';}
+        notice();
         if(!cloud.dirty)setSave('Saved to cloud ✓');
       }catch(e){
         if(cloud.epoch!==epoch)return false;
@@ -107,6 +178,7 @@ async function migrateLocal(){
 }
 function renderGate(message){
   document.getElementById('rank').innerHTML='';document.getElementById('nav').innerHTML='';document.getElementById('account').innerHTML='';document.getElementById('syncNotice').innerHTML='';
+  if(renderOfflinePracticeGate())return;
   if(cloud.user){document.getElementById('app').innerHTML=`<div class="card"><h2>${cloud.loading?'Loading your records…':'Could not load your records'}</h2><p>${esc(message||cloud.error||'Connecting to your cloud account.')}</p>${cloud.loading?'':'<button id="retryLoad">Try again</button><button id="gateSignOut">Sign out</button>'}</div>`;if(!cloud.loading){document.getElementById('retryLoad').onclick=loadCloud;document.getElementById('gateSignOut').onclick=()=>cloud.client.auth.signOut();}return;}
   document.getElementById('app').innerHTML=`<div class="card"><h2>Sign in to Belay</h2><p>Your skills, jobs, practice and plans are stored in your cloud account. Use the same account as your other apps.</p><button class="pri" id="googleLogin">Continue with Google</button><form id="loginForm"><label for="loginEmail">Email</label><input id="loginEmail" type="email" autocomplete="username" required><label for="loginPassword">Password (if you use email sign-in)</label><input id="loginPassword" type="password" autocomplete="current-password" required><button style="margin-top:12px" type="submit">Sign in with email</button></form><p id="authMessage" role="status">${esc(message||cloud.error||'')}</p><p class="muted">Existing device data is kept until you sign in and choose to move it.</p></div>`;
   document.getElementById('googleLogin').onclick=async()=>{try{const {error}=await cloud.client.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+location.pathname}});if(error)throw error;}catch(e){document.getElementById('authMessage').textContent=e.message;}};
@@ -121,7 +193,9 @@ async function loadCloud(){
     if(epoch!==cloud.epoch)return;
     if(ref.error)throw ref.error;if(row.error)throw row.error;
     applyReference(ref.data.data);S=row.data?normalize(row.data.data):blank();cloud.version=row.data?.version||0;
-    cloud.ready=true;cloud.error='';cloud.conflict=false;render();notice();setSave(row.data?'Loaded from cloud ✓':'Cloud connected · no records yet');
+    let merged=0,queueIssue='';try{clearSavedPractice(cloud.user.id,S);merged=appendPendingPractice(cloud.user.id)}catch(e){queueIssue='Device practice queue needs attention: '+e.message;}
+    cloud.ready=true;cloud.error=queueIssue;cloud.conflict=false;render();notice();setSave(merged?`${merged} device practice entries awaiting sync`:row.data?'Loaded from cloud ✓':'Cloud connected · no records yet');
+    if(merged)save();
   }catch(e){if(epoch===cloud.epoch){cloud.error=e.message;setSave('Load failed');}}
   finally{cloud.loading=false;if(!cloud.ready)renderGate();}
 }
@@ -145,7 +219,7 @@ async function boot(){
 }
 window.addEventListener('beforeunload',e=>{if(cloud.dirty){e.preventDefault();e.returnValue='';}});
 window.addEventListener('offline',()=>{showConnection();if(cloud.dirty){cloud.error='Offline. Changes are in this open tab only. Download your changes before closing.';notice();}});
-window.addEventListener('online',()=>{showConnection();if(cloud.dirty)flushSave();else if(cloud.user&&!cloud.ready&&!cloud.loading)loadCloud();});
+window.addEventListener('online',()=>{showConnection();if(cloud.dirty)flushSave();else if(cloud.user&&!cloud.ready&&!cloud.loading)loadCloud();else if(!cloud.client)renderGate('Back online. Reload to sign in and synchronize device practice.');});
 if('serviceWorker' in navigator&&location.protocol==='https:')window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 // Refresh when returning to the tab, but never interrupt a form or unsaved work.
 window.addEventListener('focus',()=>{if(cloud.ready&&!cloud.dirty&&!cloud.saving&&!document.getElementById('modal').classList.contains('on')&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))loadCloud();});

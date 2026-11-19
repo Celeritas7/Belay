@@ -95,7 +95,7 @@ nav button{padding:4px 3px}
 <div id="modal"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.js"></script>
-<script src="cloud.js?v=3"></script>
+<script src="cloud.js?v=4"></script>
 <script>
 // Reference values are supplied by belay_reference after sign-in.
 let LV=[],TIER=[],COUNTRIES=[],STARTER_SKILLS=[],STARTER_WANT=[],STARTER_JOBS=[],RANKS=[],PERSONA="",PROMPTS={},BUCKETS={},DEFAULT_SETTINGS={};
@@ -406,7 +406,8 @@ function vMore(){
 }
 function vSettings(){
  const x=xpInfo();
- return pageTitle('Settings & data','Your account, goals and saved records.')+`<section class="card"><h2>Account</h2><p>${esc(cloud.user?.email||'Signed in')}</p><div class="row wrap"><button id="refreshCloud">Refresh cloud data</button><button id="signOut">Sign out</button></div></section><section class="card"><h2>Practice goal</h2><p>${S.settings.weeklyGoal||300} minutes each week</p><button data-act="weekly">Change weekly goal</button></section><section class="card"><h2>Your data</h2><p class="muted">Records save to your cloud account. Export a copy before replacing data with an import.</p><div class="row wrap"><button data-act="download">Download backup</button><button data-act="export">Copy JSON</button><button data-act="import">Import JSON</button></div>${cloud.legacy?'<div class="migration-panel"><h3>Records found on this device</h3><p class="muted">Move the previous app\'s records into your account. This replaces your current cloud records after confirmation.</p><button class="pri" id="migrateLocal">Move device data to cloud</button></div>':''}</section><section class="card"><h2>Your journey</h2><div class="row sp"><b>${esc(x.name)}</b><span>${x.xp.toLocaleString()} XP</span></div><div class="bar action-row"><i style="width:${x.pct*100}%"></i></div><p class="muted">${x.next?x.need.toLocaleString()+' XP to '+esc(x.next):'Top rank reached'} · Practice, skill levels and work records build XP.</p></section>`;
+ const offline=readOfflineProfile(),enabled=offline?.owner===cloud.user?.id,count=pendingPracticeCount(cloud.user?.id);
+ return pageTitle('Settings & data','Your account, goals and saved records.')+`<section class="card"><h2>Account</h2><p>${esc(cloud.user?.email||'Signed in')}</p><div class="row wrap"><button id="refreshCloud">Refresh cloud data</button><button id="signOut">Sign out</button></div></section><section class="card"><h2>Offline practice on this device</h2><p class="muted">Opt in to keep only your account ID, skill names and unsynced practice sessions in this browser. You can record practice after reopening the app without internet. To sync, reconnect and sign into this same account. Do not clear website data before syncing.</p><div class="row wrap"><span class="pill ${enabled?'good':''}">${enabled?'Enabled':'Not enabled'}</span><span class="pill">${count<0?'Queue needs attention':count+' pending'}</span></div><div class="row wrap action-row">${enabled?'<button data-act="enableOfflinePractice">Refresh offline skill list</button><button data-act="disableOfflinePractice">Disable offline practice</button>':'<button data-act="enableOfflinePractice">Enable offline practice</button>'}<button data-act="syncOfflinePractice" ${count<=0?'disabled':''}>Sync pending practice</button></div></section><section class="card"><h2>Practice goal</h2><p>${S.settings.weeklyGoal||300} minutes each week</p><button data-act="weekly">Change weekly goal</button></section><section class="card"><h2>Your data</h2><p class="muted">Records save to your cloud account. Export a copy before replacing data with an import.</p><div class="row wrap"><button data-act="download">Download backup</button><button data-act="export">Copy JSON</button><button data-act="import">Import JSON</button></div>${cloud.legacy?'<div class="migration-panel"><h3>Records found on this device</h3><p class="muted">Move the previous app\'s records into your account. This replaces your current cloud records after confirmation.</p><button class="pri" id="migrateLocal">Move device data to cloud</button></div>':''}</section><section class="card"><h2>Your journey</h2><div class="row sp"><b>${esc(x.name)}</b><span>${x.xp.toLocaleString()} XP</span></div><div class="bar action-row"><i style="width:${x.pct*100}%"></i></div><p class="muted">${x.next?x.need.toLocaleString()+' XP to '+esc(x.next):'Top rank reached'} · Practice, skill levels and work records build XP.</p></section>`;
 }
 
 function vWork(){
@@ -491,10 +492,10 @@ function milestoneForm(m){
 function toast(t,big){const e=document.getElementById('toast');e.textContent=t;e.className='toast'+(big?' big':'');e.style.display='block';clearTimeout(e._t);e._t=setTimeout(()=>e.style.display='none',big?4000:2200)}
 function logPractice(s,m){
   if(!Number.isInteger(m)||m<1||m>1440){toast('Enter 1–1440 whole minutes.');return;}
-  const before=bestUnlocked();S.log.push({d:today(),s,m});
+  const before=bestUnlocked();if(!recordPractice(s,m))return;
   const total=S.log.filter(l=>l.s===s).reduce((a,l)=>a+l.m,0);
   const r0=before;const rk=xpInfo();
-  toast(`+${m} XP · ${Math.round(total/60*10)/10} h on ${s} · streak ${streak()} 🔥${rk.next?' · '+rk.need+' XP to '+rk.next:''}`);save();render();
+  toast(`+${m} XP · ${Math.round(total/60*10)/10} h on ${s} · streak ${streak()} 🔥${rk.next?' · '+rk.need+' XP to '+rk.next:''}`);render();
 }
 
 // ---------- events ----------
@@ -526,7 +527,10 @@ document.addEventListener('click',e=>{
   if(a==='estClear'){S.cAI={};save();render()}
   if(a==='want'){const s=S.skills.find(s=>s.id===id);s.want=!s.want;save();render()}
   if(a==='practice'){e.stopPropagation();logPractice(t.dataset.s,30)}
-  if(a==='practiceCustom'){const s=t.dataset.s;form('Log practice: '+s,[{k:'m',l:'Minutes (1–1440)',t:'number'}],{m:60},o=>{if(!Number.isInteger(o.m)||o.m<1||o.m>1440){toast('Enter 1–1440 whole minutes.');return false;}S.log.push({d:today(),s,m:o.m});toast(`+${o.m} min on ${s}`)})}
+  if(a==='practiceCustom'){const s=t.dataset.s;form('Log practice: '+s,[{k:'m',l:'Minutes (1–1440)',t:'number'}],{m:60},o=>{if(!Number.isInteger(o.m)||o.m<1||o.m>1440){toast('Enter 1–1440 whole minutes.');return false;}if(!recordPractice(s,o.m))return false;toast(`+${o.m} min on ${s}`)})}
+  if(a==='enableOfflinePractice')enableOfflinePractice();
+  if(a==='disableOfflinePractice')disableOfflinePractice();
+  if(a==='syncOfflinePractice'){try{const count=appendPendingPractice(cloud.user.id);if(count){save();render();flushSave()}else{clearSavedPractice(cloud.user.id,S);render();toast('Device practice is already synchronized.')}}catch(e){toast('Could not read device practice queue.');}}
   if(a==='addJob')jobForm();
   if(a==='addApplication')applicationForm();
   if(a==='editApplication')applicationForm(S.applications.find(x=>x.id===id));

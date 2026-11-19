@@ -1,8 +1,8 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
 const root=path.resolve(__dirname,'..');
 const ref={LV:['None','Aware','Basic','Working','Strong','Expert'],TIER:['','Entry','Mid','Senior','Lead','Manager'],COUNTRIES:[['JP','Japan',36000,24,14600,2.1]],STARTER_SKILLS:[['Test skill','Design',2]],STARTER_WANT:['Test skill'],STARTER_JOBS:[['Test job',2,100,{'Test skill':2}]],RANKS:[[0,'Apprentice'],[1000,'Engineer']],PERSONA:'Test coach',PROMPTS:{daily:'Test prompt'},BUCKETS:{},settings:{gross:5500000,fx:157,weeklyGoal:300}};
-function setup(){
- const els={},store=new Map(),listeners={};let record=null,fail=false,authCallback;
+function setup(store=new Map()){
+ const els={},listeners={};let record=null,fail=false,authCallback;
  const element=id=>els[id]??=( {innerHTML:'',textContent:'',value:'',style:{},dataset:{},setAttribute(){},removeAttribute(){},classList:{add(){},remove(){},contains(){return false}},addEventListener(){},insertAdjacentHTML(){},click(){},querySelector(){return element('button')}});
  const doc={getElementById:element,addEventListener(n,f){listeners[n]=f},querySelector:element,activeElement:{tagName:'BODY'},createElement:element};
  const client={auth:{onAuthStateChange(f){authCallback=f},async getSession(){return {data:{session:null}}},async signOut(){authCallback('SIGNED_OUT',null);return {}}},from(table){return {select(){return this},eq(){return this},async single(){return {data:{data:ref}}},async maybeSingle(){return {data:record?structuredClone(record):null}}}},async rpc(name,args){
@@ -161,4 +161,60 @@ test('long form has labeled dialog, scrollable body and fixed save controls',asy
  assert.match(t.els.sheet.innerHTML,/class="form-fields"/);
  assert.match(t.els.sheet.innerHTML,/class="form-actions row sp"/);
  assert.match(t.els.sheet.innerHTML,/id="formTitle"/);
+});
+
+test('opt-in offline queue survives restart and syncs without duplicate practice',async()=>{
+ const storage=new Map();const t=setup(storage);await t.ready;await t.run("sessionChanged({user:{id:'person-a',email:'a@example.invalid'}})");
+ t.run("S.skills=[{id:'cad',name:'CAD',cat:'Design',level:2}];tab='settings';render()");
+ t.click({act:'enableOfflinePractice'});
+ assert.equal(t.run('readOfflineProfile().owner'),'person-a');
+ t.run("navigator.onLine=false;logPractice('CAD',30)");
+ assert.equal(t.run('pendingPracticeCount(\'person-a\')'),1);
+ assert.equal(await t.run('flushSave()'),false);
+ const restart=setup(storage);restart.run('navigator.onLine=false');await restart.ready;restart.run('renderGate()');
+ assert.match(restart.els.app.innerHTML,/Practice offline/);
+ restart.run("document.getElementById('offlineSkill').value='CAD';document.getElementById('offlineMinutes').value='25'");
+ restart.els.saveOfflinePractice.onclick();
+ assert.equal(restart.run("pendingPracticeCount('person-a')"),2);
+ const online=setup(storage);await online.ready;await online.run("sessionChanged({user:{id:'person-a',email:'a@example.invalid'}})");
+ assert.equal(online.run('S.log.length'),2);
+ await online.run('flushSave()');
+ assert.equal(online.record().data.log.length,2);
+ assert.equal(online.run("pendingPracticeCount('person-a')"),0);
+ // A crash after a server save but before local cleanup must not replay an existing ID.
+ online.run("queuePractice('person-a',{...S.log[0]})");
+ await online.run('loadCloud()');
+ assert.equal(online.run('S.log.length'),2);
+ assert.equal(online.run("pendingPracticeCount('person-a')"),0);
+});
+
+test('device queue is account scoped and protects entries from another account',async()=>{
+ const storage=new Map(),t=setup(storage);await t.ready;await t.run("sessionChanged({user:{id:'person-a',email:'a@example.invalid'}})");
+ t.run("S.skills=[{id:'skill',name:'CAD',level:3}]");t.click({act:'enableOfflinePractice'});
+ t.run("navigator.onLine=false;logPractice('CAD',45)");
+ const other=setup(storage);await other.ready;await other.run("sessionChanged({user:{id:'person-b',email:'b@example.invalid'}})");
+ assert.equal(other.run('S.log.length'),0);
+ assert.equal(other.run("pendingPracticeCount('person-a')"),1);
+ other.click({act:'enableOfflinePractice'});
+ assert.equal(other.run('readOfflineProfile().owner'),'person-a');
+ assert.equal(other.run('S.log.length'),0);
+});
+
+test('version conflict never drops queued practice; recovery rebases on newer cloud state',async()=>{
+ const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'person-a',email:'a@example.invalid'}})");
+ t.click({act:'enableOfflinePractice'});
+ t.run("navigator.onLine=false;logPractice('Test skill',40)");
+ assert.equal(t.run("pendingPracticeCount('person-a')"),1);
+ t.setRecord({version:1,data:JSON.parse(t.run("JSON.stringify({...blank(),settings:{...blank().settings,weeklyGoal:420}})"))});
+ t.run('navigator.onLine=true');assert.equal(await t.run('flushSave()'),false);
+ assert.equal(t.run('cloud.conflict'),true);
+ assert.equal(t.run("pendingPracticeCount('person-a')"),1);
+ assert.match(t.els.syncNotice.innerHTML,/Recover device practice from latest cloud data/);
+ await t.els.rebasePractice.onclick();
+ // Recovery loads latest state and schedules a new versioned save.
+ await new Promise(r=>setTimeout(r,20));await t.run('flushSave()');
+ assert.equal(t.record().data.settings.weeklyGoal,420);
+ assert.equal(t.record().data.log.length,1);
+ assert.equal(t.record().data.log[0].m,40);
+ assert.equal(t.run("pendingPracticeCount('person-a')"),0);
 });
