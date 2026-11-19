@@ -1,7 +1,7 @@
 /* The browser holds working data in memory. Only the auth session persists locally. */
 const cloud={client:null,user:null,ready:false,version:0,dirty:false,saving:null,error:'',conflict:false,epoch:0,change:0,timer:null,loading:false,legacy:null};
 function setSave(text){document.getElementById('saveState').textContent=text;}
-const OFFLINE_SHELL='belay-shell-v3',OFFLINE_FILES=['./','./index.html','./cloud.js?v=5','./ui.css?v=3','./manifest.webmanifest','./icons/belay-192.png','./icons/belay-512.png'];
+const OFFLINE_SHELL='belay-shell-v4',OFFLINE_FILES=['./','./index.html','./cloud.js?v=6','./ui.css?v=3','./manifest.webmanifest','./icons/belay-192.png','./icons/belay-512.png'];
 let shellBusy=false;
 async function offlineShellReport(){
   const report={generatedAt:new Date().toISOString(),online:navigator.onLine!==false,serviceWorkerSupported:'serviceWorker' in navigator,cacheSupported:'caches' in window,files:[],ready:false};
@@ -131,6 +131,7 @@ function normalize(value){
   for(const key of ['skills','jobs','work','log'])if(!Array.isArray(d[key]))throw Error('Missing or invalid '+key+' array.');
   if(d.milestones!=null&&!Array.isArray(d.milestones))throw Error('Invalid milestones array.');
   if(d.applications!=null&&!Array.isArray(d.applications))throw Error('Invalid applications array.');
+  if(d.salaryHistory!=null&&!Array.isArray(d.salaryHistory))throw Error('Invalid salary history array.');
   for(const key of ['settings','cOver','cAI','coach'])if(d[key]!=null&&(typeof d[key]!=='object'||Array.isArray(d[key])))throw Error('Invalid '+key+'.');
   const finite=(x)=>typeof x==='number'&&Number.isFinite(x);
   const requirements=r=>r&&typeof r==='object'&&!Array.isArray(r)&&Object.entries(r).every(([n,l])=>n&&finite(l)&&l>=1&&l<=5);
@@ -145,12 +146,13 @@ function normalize(value){
   if(d.log.some(l=>!l||typeof l.s!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(l.d)||!finite(l.m)||l.m<0))throw Error('Invalid practice record.');
   if((d.milestones||[]).some(m=>!m||typeof m.title!=='string'||!m.title.trim()||typeof m.done!=='boolean'||(m.jobId!=null&&typeof m.jobId!=='string')||(m.due&&!/^\d{4}-\d{2}-\d{2}$/.test(m.due))||(m.notes!=null&&typeof m.notes!=='string')))throw Error('Invalid career milestone.');
   if((d.applications||[]).some(a=>!a||typeof a.title!=='string'||!a.title.trim()||!['Saved','Applied','Interview','Offer','Rejected','Withdrawn'].includes(a.status)||typeof a.company!=='string'||typeof a.location!=='string'||typeof a.url!=='string'||(a.url&&!/^https?:\/\//i.test(a.url))||(a.salary!=null&&(!finite(a.salary)||a.salary<0))||!requirements(a.req)||(a.appliedDate&&!/^\d{4}-\d{2}-\d{2}$/.test(a.appliedDate))||typeof a.notes!=='string'||typeof a.updated!=='string'))throw Error('Invalid job application.');
+  if((d.salaryHistory||[]).some(r=>!r||typeof r.employer!=='string'||!r.employer.trim()||!/^\d{4}-(0[1-9]|1[0-2])$/.test(r.month)||!['JPY','USD','INR','EUR','GBP'].includes(r.currency)||!finite(r.gross)||r.gross<0||!finite(r.net)||r.net<0||typeof r.notes!=='string'||typeof r.updated!=='string'||(r.filePath!=null&&(!/^[\w-]+\/[\w-]+\.(pdf|png|jpg|webp|heic)$/.test(r.filePath)||typeof r.fileName!=='string'||typeof r.fileType!=='string'||!finite(r.fileSize)||r.fileSize<1||r.fileSize>10*1024*1024))))throw Error('Invalid salary history record.');
   if(d.coach?.practiceRoadmap){
     const p=d.coach.practiceRoadmap;
     if(!/^\d{4}-\d{2}-\d{2}$/.test(p.created||'')||!Number.isFinite(new Date(p.created+'T00:00:00').getTime())||typeof p.targetJobId!=='string'||!Array.isArray(p.weeks)||p.weeks.length!==4||p.weeks.some(w=>!w||typeof w.skill!=='string'||!w.skill.trim()||!Number.isInteger(w.minutes)||w.minutes<1||w.minutes>1440))throw Error('Invalid coaching roadmap.');
   }
   // Keep attribute IDs safe, including older imported records with missing IDs.
-  for(const key of ['skills','jobs','work','milestones','applications']){const seen=new Set();for(const row of d[key]||[]){if(typeof row.id!=='string'||!/^[\w-]+$/.test(row.id)||seen.has(row.id))row.id=crypto.randomUUID();seen.add(row.id);}}
+  for(const key of ['skills','jobs','work','milestones','applications','salaryHistory']){const seen=new Set();for(const row of d[key]||[]){if(typeof row.id!=='string'||!/^[\w-]+$/.test(row.id)||seen.has(row.id))row.id=crypto.randomUUID();seen.add(row.id);}}
   const b=blank();
   return {...b,...d,settings:{...b.settings,...d.settings},cOver:d.cOver||{},cAI:d.cAI||{},coach:d.coach||{}};
 }
