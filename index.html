@@ -102,7 +102,8 @@ let LV=[],TIER=[],COUNTRIES=[],STARTER_SKILLS=[],STARTER_WANT=[],STARTER_JOBS=[]
 
 
 const uid=()=>Math.random().toString(36).slice(2,10);
-const today=()=>new Date().toISOString().slice(0,10);
+const dateKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const today=()=>dateKey(new Date());
 const blank=()=>({skills:[],work:[],jobs:[],log:[],settings:{...DEFAULT_SETTINGS},cOver:{},cAI:{},coach:{}});
 let S=blank(), tab="home", sortC="surplus", loaded=false;
 
@@ -131,8 +132,8 @@ function nextSkills(){
 }
 function streak(){
   const days=new Set(S.log.map(l=>l.d));let c=0;const d=new Date();
-  if(!days.has(d.toISOString().slice(0,10)))d.setDate(d.getDate()-1);
-  while(days.has(d.toISOString().slice(0,10))){c++;d.setDate(d.getDate()-1)}
+  if(!days.has(dateKey(d)))d.setDate(d.getDate()-1);
+  while(days.has(dateKey(d))){c++;d.setDate(d.getDate()-1)}
   return c;
 }
 function weekMin(){const t=Date.now()-7*864e5;return S.log.filter(l=>new Date(l.d).getTime()>=t).reduce((a,l)=>a+l.m,0)}
@@ -179,7 +180,7 @@ function renderRank(){
   const x=xpInfo(),st=streak();
   document.getElementById('rank').innerHTML=`<div class="rank"><div class="row"><b>${esc(x.name)}</b><span class="muted">${x.xp.toLocaleString()} XP</span><div class="bar"><i style="width:${Math.round(x.pct*100)}%"></i></div><span class="muted">${st}🔥</span></div><div class="muted" style="font-size:12px">${x.next?`${x.need.toLocaleString()} XP to <b>${esc(x.next)}</b> · 1 min practice = 1 XP · skill levels and work items give more`:'Top rank reached'}</div></div>`;
 }
-function heat(){let h='';for(let i=27;i>=0;i--){const d=new Date(Date.now()-i*864e5).toISOString().slice(0,10);const m=S.log.filter(l=>l.d===d).reduce((a,l)=>a+l.m,0);h+=`<i class="${m?'h':''}" title="${d}: ${m} min" style="${m?'opacity:'+(0.3+0.7*Math.min(1,m/60)):''}"></i>`}return `<div class="heat">${h}</div>`}
+function heat(){let h='';for(let i=27;i>=0;i--){const day=new Date();day.setDate(day.getDate()-i);const d=dateKey(day);const m=S.log.filter(l=>l.d===d).reduce((a,l)=>a+l.m,0);h+=`<i class="${m?'h':''}" title="${d}: ${m} min" style="${m?'opacity:'+(0.3+0.7*Math.min(1,m/60)):''}"></i>`}return `<div class="heat">${h}</div>`}
 function moneyGap(){
   const cur=bestUnlocked();const cs=cur?cur.salary:0;
   const cand=S.jobs.filter(j=>match(j).pct<UNLOCK&&j.salary>cs).sort((a,b)=>match(b).pct-match(a).pct||b.salary-a.salary)[0];
@@ -420,6 +421,7 @@ function workForm(w){
 }
 function toast(t,big){const e=document.getElementById('toast');e.textContent=t;e.className='toast'+(big?' big':'');e.style.display='block';clearTimeout(e._t);e._t=setTimeout(()=>e.style.display='none',big?4000:2200)}
 function logPractice(s,m){
+  if(!Number.isInteger(m)||m<1||m>1440){toast('Enter 1–1440 whole minutes.');return;}
   const before=bestUnlocked();S.log.push({d:today(),s,m});
   const total=S.log.filter(l=>l.s===s).reduce((a,l)=>a+l.m,0);
   const r0=before;const rk=xpInfo();
@@ -450,7 +452,7 @@ document.addEventListener('click',e=>{
   if(a==='estClear'){S.cAI={};save();render()}
   if(a==='want'){const s=S.skills.find(s=>s.id===id);s.want=!s.want;save();render()}
   if(a==='practice'){e.stopPropagation();logPractice(t.dataset.s,30)}
-  if(a==='practiceCustom'){const s=t.dataset.s;form('Log practice: '+s,[{k:'m',l:'Minutes',t:'number'}],{m:60},o=>{if(!o.m)return false;S.log.push({d:today(),s,m:o.m});toast(`+${o.m} min on ${s}`)})}
+  if(a==='practiceCustom'){const s=t.dataset.s;form('Log practice: '+s,[{k:'m',l:'Minutes (1–1440)',t:'number'}],{m:60},o=>{if(!Number.isInteger(o.m)||o.m<1||o.m>1440){toast('Enter 1–1440 whole minutes.');return false;}S.log.push({d:today(),s,m:o.m});toast(`+${o.m} min on ${s}`)})}
   if(a==='addJob')jobForm();
   if(a==='editJob')jobForm(S.jobs.find(j=>j.id===id));
   if(a==='addWork')workForm();
