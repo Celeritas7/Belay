@@ -83,3 +83,19 @@ test('date keys and streak use local calendar dates',async()=>{
  t.run("S.log=[{s:'Test skill',d:today(),m:30}]");
  assert.equal(t.run('streak()'),1);
 });
+
+test('career milestones and skill evidence survive cloud reload',async()=>{
+ const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
+ t.run("S.jobs=[{id:'job',title:'Robotics engineer',tier:3,salary:6000000,req:{CAD:3}}];S.settings.targetJobId='job';S.skills=[{id:'cad',name:'CAD',cat:'Engineering',level:2}];S.work=[{id:'w',title:'Designed test fixture',skills:['CAD'],date:'2026-11-10'}]");
+ t.click({act:'addMilestone'});
+ t.run("document.getElementById('f_title').value='Complete CAD project';document.getElementById('f_due').value='2026-12-15';document.getElementById('f_jobId').value='job'");
+ t.els.fx_save.onclick();await t.run('flushSave()');
+ assert.equal(t.record().data.milestones[0].jobId,'job');
+ t.run("tab='skills';render()");assert.match(t.els.app.innerHTML,/Evidence: Designed test fixture/);
+ t.run("tab='milestones';render()");assert.match(t.els.app.innerHTML,/Complete CAD project/);
+ t.click({act:'toggleMilestone',id:t.record().data.milestones[0].id});await t.run('flushSave()');
+ assert.equal(t.record().data.milestones[0].done,true);
+ t.run('S=blank()');await t.run('loadCloud()');
+ assert.equal(t.run('S.milestones[0].done'),true);
+ assert.throws(()=>t.run("normalize({...blank(),milestones:[{title:'Broken',done:'yes'}]})"),/milestone/);
+});
