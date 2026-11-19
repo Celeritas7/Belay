@@ -1,7 +1,7 @@
 /* The browser holds working data in memory. Only the auth session persists locally. */
 const cloud={client:null,user:null,ready:false,version:0,dirty:false,saving:null,error:'',conflict:false,epoch:0,change:0,timer:null,loading:false,legacy:null};
 function setSave(text){document.getElementById('saveState').textContent=text;}
-const OFFLINE_SHELL='belay-shell-v5',OFFLINE_FILES=['./','./index.html','./cloud.js?v=7','./ui.css?v=3','./manifest.webmanifest','./icons/belay-192.png','./icons/belay-512.png'];
+const OFFLINE_SHELL='belay-shell-v6',OFFLINE_FILES=['./','./index.html','./cloud.js?v=8','./ui.css?v=3','./manifest.webmanifest','./icons/belay-192.png','./icons/belay-512.png'];
 let shellBusy=false;
 async function offlineShellReport(){
   const report={generatedAt:new Date().toISOString(),online:navigator.onLine!==false,serviceWorkerSupported:'serviceWorker' in navigator,cacheSupported:'caches' in window,files:[],ready:false};
@@ -133,6 +133,7 @@ function normalize(value){
   if(d.applications!=null&&!Array.isArray(d.applications))throw Error('Invalid applications array.');
   if(d.salaryHistory!=null&&!Array.isArray(d.salaryHistory))throw Error('Invalid salary history array.');
   if(d.subscriptions!=null&&!Array.isArray(d.subscriptions))throw Error('Invalid subscriptions array.');
+  if(d.careerExpenses!=null&&!Array.isArray(d.careerExpenses))throw Error('Invalid career expenses array.');
   for(const key of ['settings','cOver','cAI','coach'])if(d[key]!=null&&(typeof d[key]!=='object'||Array.isArray(d[key])))throw Error('Invalid '+key+'.');
   const finite=(x)=>typeof x==='number'&&Number.isFinite(x);
   const requirements=r=>r&&typeof r==='object'&&!Array.isArray(r)&&Object.entries(r).every(([n,l])=>n&&finite(l)&&l>=1&&l<=5);
@@ -150,12 +151,13 @@ function normalize(value){
   if((d.salaryHistory||[]).some(r=>!r||typeof r.employer!=='string'||!r.employer.trim()||!/^\d{4}-(0[1-9]|1[0-2])$/.test(r.month)||!['JPY','USD','INR','EUR','GBP'].includes(r.currency)||!finite(r.gross)||r.gross<0||!finite(r.net)||r.net<0||typeof r.notes!=='string'||typeof r.updated!=='string'||(r.filePath!=null&&(!/^[\w-]+\/[\w-]+\.(pdf|png|jpg|webp|heic)$/.test(r.filePath)||typeof r.fileName!=='string'||typeof r.fileType!=='string'||!finite(r.fileSize)||r.fileSize<1||r.fileSize>10*1024*1024))))throw Error('Invalid salary history record.');
   const validDate=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&!Number.isNaN(Date.parse(v+'T00:00:00Z'))&&new Date(v+'T00:00:00Z').toISOString().slice(0,10)===v;
   if((d.subscriptions||[]).some(s=>!s||typeof s.name!=='string'||!s.name.trim()||typeof s.provider!=='string'||!['Learning','Career tools','Software','Professional memberships','Other'].includes(s.category)||!['JPY','USD','INR','EUR','GBP'].includes(s.currency)||!finite(s.amount)||s.amount<0||!['Monthly','Quarterly','Yearly'].includes(s.interval)||!['Active','Paused','Cancelled'].includes(s.status)||typeof s.autoRenew!=='boolean'||typeof s.nextRenewal!=='string'||(s.nextRenewal&&!validDate(s.nextRenewal))||(s.status==='Active'&&!s.nextRenewal)||typeof s.notes!=='string'||typeof s.updated!=='string'))throw Error('Invalid subscription record.');
+  if((d.careerExpenses||[]).some(r=>!r||typeof r.title!=='string'||!r.title.trim()||typeof r.provider!=='string'||!['Course / training','Certification / exam','Books / materials','Equipment / tools','Conference / networking','Other'].includes(r.category)||!validDate(r.date)||!['Planned','Paid'].includes(r.status)||!['JPY','USD','INR','EUR','GBP'].includes(r.currency)||!finite(r.amount)||r.amount<0||typeof r.milestoneId!=='string'||typeof r.notes!=='string'||typeof r.updated!=='string'))throw Error('Invalid career expense record.');
   if(d.coach?.practiceRoadmap){
     const p=d.coach.practiceRoadmap;
     if(!/^\d{4}-\d{2}-\d{2}$/.test(p.created||'')||!Number.isFinite(new Date(p.created+'T00:00:00').getTime())||typeof p.targetJobId!=='string'||!Array.isArray(p.weeks)||p.weeks.length!==4||p.weeks.some(w=>!w||typeof w.skill!=='string'||!w.skill.trim()||!Number.isInteger(w.minutes)||w.minutes<1||w.minutes>1440))throw Error('Invalid coaching roadmap.');
   }
   // Keep attribute IDs safe, including older imported records with missing IDs.
-  for(const key of ['skills','jobs','work','milestones','applications','salaryHistory','subscriptions']){const seen=new Set();for(const row of d[key]||[]){if(typeof row.id!=='string'||!/^[\w-]+$/.test(row.id)||seen.has(row.id))row.id=crypto.randomUUID();seen.add(row.id);}}
+  for(const key of ['skills','jobs','work','milestones','applications','salaryHistory','subscriptions','careerExpenses']){const seen=new Set();for(const row of d[key]||[]){if(typeof row.id!=='string'||!/^[\w-]+$/.test(row.id)||seen.has(row.id))row.id=crypto.randomUUID();seen.add(row.id);}}
   const b=blank();
   return {...b,...d,settings:{...b.settings,...d.settings},cOver:d.cOver||{},cAI:d.cAI||{},coach:d.coach||{}};
 }
