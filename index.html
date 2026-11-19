@@ -104,7 +104,7 @@ let LV=[],TIER=[],COUNTRIES=[],STARTER_SKILLS=[],STARTER_WANT=[],STARTER_JOBS=[]
 const uid=()=>Math.random().toString(36).slice(2,10);
 const dateKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const today=()=>dateKey(new Date());
-const blank=()=>({skills:[],work:[],jobs:[],log:[],milestones:[],settings:{...DEFAULT_SETTINGS},cOver:{},cAI:{},coach:{}});
+const blank=()=>({skills:[],work:[],jobs:[],log:[],milestones:[],applications:[],settings:{...DEFAULT_SETTINGS},cOver:{},cAI:{},coach:{}});
 let S=blank(), tab="home", sortC="surplus", loaded=false;
 
 // ---------- logic ----------
@@ -321,9 +321,9 @@ const targetJob=()=>S.jobs.find(j=>j.id===S.settings.targetJobId)||null;
 const skillEvidence=name=>S.work.filter(w=>(w.skills||[]).some(n=>n.toLowerCase()===name.toLowerCase()));
 const needsPractice=s=>{const d=lastPractice(s.name);return s.want&&(!d||Date.now()-new Date(d).getTime()>14*864e5)};
 function pageTitle(title,desc,action=''){return `<div class="page-title"><div><h2>${title}</h2><p class="muted">${desc}</p></div>${action}</div>`}
-function careerTabs(){return `<div class="segments" aria-label="Career sections"><button data-tab="jobs" class="${tab==='jobs'?'selected':''}">Job goals</button><button data-tab="milestones" class="${tab==='milestones'?'selected':''}">Milestones</button><button data-tab="work" class="${tab==='work'?'selected':''}">Work record</button></div>`}
+function careerTabs(){return `<div class="segments" aria-label="Career sections"><button data-tab="jobs" class="${tab==='jobs'?'selected':''}">Job goals</button><button data-tab="applications" class="${tab==='applications'?'selected':''}">Applications</button><button data-tab="milestones" class="${tab==='milestones'?'selected':''}">Milestones</button><button data-tab="work" class="${tab==='work'?'selected':''}">Work record</button></div>`}
 function nav(){
-  const active=['jobs','work','milestones'].includes(tab)?'jobs':['more','world','coach','settings'].includes(tab)?'more':tab;
+  const active=['jobs','work','milestones','applications'].includes(tab)?'jobs':['more','world','coach','settings'].includes(tab)?'more':tab;
   const T=[['home','⌂','Overview'],['skills','◆','Skills'],['jobs','↗','Career'],['more','☰','More']];
   document.getElementById('nav').innerHTML=T.map(([k,i,l])=>`<button class="${active===k?'on':''}" data-tab="${k}" ${active===k?'aria-current="page"':''}><b aria-hidden="true">${i}</b>${l}</button>`).join('');
 }
@@ -369,6 +369,14 @@ function vJobs(){
  h+=`<h3 class="section-label">All job profiles <span class="muted">${js.length}</span></h3>`;
  h+=js.map(j=>{const m=match(j);return `<details class="card job-details"><summary><span><strong>${esc(j.title)}</strong><span class="muted">${esc(TIER[j.tier])} · ${man(j.salary)}/yr</span></span><span class="pill ${m.pct>=UNLOCK?'good':''}">${Math.round(m.pct*100)}% fit</span></summary><div class="detail-body"><p class="muted">${Math.round(wantPct(j)*100)}% of required skills match your interests.</p><div>${m.gaps.map(g=>`<span class="tag gap">${esc(g.n)} ${g.m} → ${g.r}</span>`).join('')}${m.have.map(g=>`<span class="tag ok">${esc(g.n)} ✓</span>`).join('')}</div>${j.notes?`<p class="muted">${esc(j.notes)}</p>`:''}<div class="row wrap action-row"><button class="pri sm" data-act="setTarget" data-id="${j.id}" ${target?.id===j.id?'disabled':''}>${target?.id===j.id?'Current target':'Make my target'}</button><button class="sm" data-act="editJob" data-id="${j.id}">Edit profile</button></div></div></details>`}).join('');
  return h;
+}
+const APPLICATION_STATUSES=['Saved','Applied','Interview','Offer','Rejected','Withdrawn'];
+function vApplications(){
+  const items=[...S.applications].sort((a,b)=>(b.updated||'').localeCompare(a.updated||''));
+  let h=pageTitle('Job applications','Track real opportunities separately from estimated career profiles.',`<button class="pri" data-act="addApplication">+ Opportunity</button>`)+careerTabs();
+  h+=`<section class="card"><h2>Your pipeline</h2><div class="row wrap">${APPLICATION_STATUSES.map(status=>`<span class="tag">${status}: ${items.filter(x=>x.status===status).length}</span>`).join('')}</div><p class="muted">Salary figures here are what you enter from individual postings, not verified live quotes or Belay country estimates.</p></section>`;
+  if(!items.length)return h+`<section class="card empty"><h2>Save your first opportunity</h2><p class="muted">Record a company, role, posting link and required skills to compare against your profile.</p><button data-act="addApplication">Add opportunity</button></section>`;
+  return h+items.map(a=>{const m=Object.keys(a.req||{}).length?match(a):null;return `<section class="card"><div class="row sp wrap"><div><h2>${esc(a.title)}</h2><div class="muted">${esc(a.company||'Company not set')}${a.location?' · '+esc(a.location):''}</div></div><span class="pill ${a.status==='Offer'?'good':''}">${esc(a.status)}</span></div><div class="row wrap" style="margin-top:10px">${m?`<span class="tag">${Math.round(m.pct*100)}% skill fit</span>`:'<span class="tag">Add requirements to calculate fit</span>'}${a.salary?`<span class="tag">Posted salary: ${yen(a.salary)}/year</span>`:''}${a.appliedDate?`<span class="tag">Applied ${esc(a.appliedDate)}</span>`:''}</div>${m&&m.gaps.length?`<p class="muted">Skill gaps: ${m.gaps.map(g=>esc(g.n)+' '+g.m+'→'+g.r).join(' · ')}</p>`:''}${a.notes?`<p class="muted">${esc(a.notes)}</p>`:''}<div class="row wrap">${a.url?`<a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">Open job posting ↗</a>`:''}<button class="sm" data-act="editApplication" data-id="${a.id}">Edit / update status</button></div></section>`}).join('');
 }
 function vMilestones(){
   const target=targetJob(),items=[...S.milestones].sort((a,b)=>(a.done===b.done?0:a.done?1:-1)||(a.due||'9999').localeCompare(b.due||'9999'));
@@ -422,7 +430,7 @@ function render(){
   if(!cloud.ready){renderGate();return;}
   nav();
   document.getElementById('rank').innerHTML='';
-  const v={home:vHome,coach:vCoach,skills:vSkills,jobs:vJobs,milestones:vMilestones,work:vWork,world:vWorld,more:vMore,settings:vSettings}[tab]();
+  const v={home:vHome,coach:vCoach,skills:vSkills,jobs:vJobs,applications:vApplications,milestones:vMilestones,work:vWork,world:vWorld,more:vMore,settings:vSettings}[tab]();
   document.getElementById('app').innerHTML=v;
   bindAccountControls();
   if(tab==='jobs')document.getElementById('targetJob').onchange=e=>{S.settings.targetJobId=e.target.value;save();render()};
@@ -448,6 +456,15 @@ function jobForm(j){
   const m=j?match(j):null;
   form(j?j.title:'New job profile',[{k:'title',l:'Job title'},{k:'tier',l:'Level',t:'select',o:TIER.slice(1),ov:[1,2,3,4,5]},{k:'salary',l:'Typical salary (¥/yr)',t:'number'},{k:'req',l:'Required skills, one per line as "Skill: level 1–5"',t:'area',r:6,p:'Creo Parametric: 4\nPython: 3'},{k:'notes',l:'Notes (companies, links, where you saw it)',t:'area'}],j?{...j,req:reqText(j.req)}:{tier:3,salary:7000000},o=>{if(!o.title.trim())return false;o.tier=+o.tier;o.req=parseReq(o.req);for(const n of Object.keys(o.req))if(!S.skills.some(s=>s.name.toLowerCase()===n.toLowerCase()))S.skills.push({id:uid(),name:n,cat:'From jobs',level:0,want:false});if(j)Object.assign(j,o);else S.jobs.push({id:uid(),...o})},j?()=>{S.jobs=S.jobs.filter(x=>x!==j)}:null);
   if(m&&m.gaps.length){document.getElementById('sheet').insertAdjacentHTML('afterbegin',`<div class="card" style="margin-top:0"><b>Gaps to close:</b> ${m.gaps.map(g=>`<span class="tag gap">${esc(g.n)} ${LV[g.m]}→${LV[g.r]}</span>`).join('')}</div>`)}
+}
+function applicationForm(a){
+  form(a?'Edit opportunity':'New job opportunity',[{k:'title',l:'Job title'},{k:'company',l:'Company'},{k:'location',l:'Location',p:'Saitama, Japan'},{k:'url',l:'Job posting URL (https://)',p:'https://example.com/job'},{k:'salary',l:'Annual salary stated in posting (¥; optional)',t:'number'},{k:'req',l:'Required skills (Skill: level 1–5)',t:'area',r:4,p:'CAD: 3\nPython: 2'},{k:'status',l:'Application status',t:'select',o:APPLICATION_STATUSES},{k:'appliedDate',l:'Application date',t:'date'},{k:'notes',l:'Notes / interview preparation',t:'area',r:3}],a?{...a,req:reqText(a.req)}:{status:'Saved',salary:''},o=>{
+    if(!o.title.trim())return false;
+    if(o.url){try{const u=new URL(o.url);if(u.protocol!=='https:'&&u.protocol!=='http:')throw Error();o.url=u.href;}catch(e){toast('Enter a valid http(s) posting URL.');return false;}}
+    if(o.salary!==null&&(!Number.isFinite(o.salary)||o.salary<0)){toast('Enter a valid salary or leave it blank.');return false;}
+    o.title=o.title.trim();o.company=o.company.trim();o.req=parseReq(o.req);o.updated=today();
+    if(a)Object.assign(a,o);else S.applications.push({id:uid(),...o});
+  },a?()=>{S.applications=S.applications.filter(x=>x!==a)}:null);
 }
 function workForm(w){
   form(w?'Edit work item':'New work item',[{k:'title',l:'What you did',p:'Designed welding fixture for truck frame'},{k:'org',l:'Company / project'},{k:'date',l:'Date',t:'date'},{k:'desc',l:'Details',t:'area'},{k:'impact',l:'Impact (numbers are best)',p:'Cut cycle time 18%'},{k:'skills',l:'Skills used (comma-separated)',p:'Creo Parametric, GD&T'}],w?{...w,skills:(w.skills||[]).join(', ')}:{date:today()},o=>{if(!o.title.trim())return false;o.skills=o.skills.split(',').map(x=>x.trim()).filter(Boolean);if(w)Object.assign(w,o);else S.work.push({id:uid(),...o})},w?()=>{S.work=S.work.filter(x=>x!==w)}:null);
@@ -496,6 +513,8 @@ document.addEventListener('click',e=>{
   if(a==='practice'){e.stopPropagation();logPractice(t.dataset.s,30)}
   if(a==='practiceCustom'){const s=t.dataset.s;form('Log practice: '+s,[{k:'m',l:'Minutes (1–1440)',t:'number'}],{m:60},o=>{if(!Number.isInteger(o.m)||o.m<1||o.m>1440){toast('Enter 1–1440 whole minutes.');return false;}S.log.push({d:today(),s,m:o.m});toast(`+${o.m} min on ${s}`)})}
   if(a==='addJob')jobForm();
+  if(a==='addApplication')applicationForm();
+  if(a==='editApplication')applicationForm(S.applications.find(x=>x.id===id));
   if(a==='addMilestone')milestoneForm();
   if(a==='editMilestone')milestoneForm(S.milestones.find(m=>m.id===id));
   if(a==='toggleMilestone'){const m=S.milestones.find(m=>m.id===id);if(m){m.done=!m.done;save();render();}}
