@@ -14,6 +14,10 @@ function normalize(value){
   if(d.work.some(w=>!w||typeof w.title!=='string'||(w.skills&&!Array.isArray(w.skills))))throw Error('Invalid work record.');
   if(d.log.some(l=>!l||typeof l.s!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(l.d)||!finite(l.m)||l.m<0))throw Error('Invalid practice record.');
   if((d.milestones||[]).some(m=>!m||typeof m.title!=='string'||!m.title.trim()||typeof m.done!=='boolean'||(m.jobId!=null&&typeof m.jobId!=='string')||(m.due&&!/^\d{4}-\d{2}-\d{2}$/.test(m.due))||(m.notes!=null&&typeof m.notes!=='string')))throw Error('Invalid career milestone.');
+  if(d.coach?.practiceRoadmap){
+    const p=d.coach.practiceRoadmap;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(p.created||'')||!Number.isFinite(new Date(p.created+'T00:00:00').getTime())||typeof p.targetJobId!=='string'||!Array.isArray(p.weeks)||p.weeks.length!==4||p.weeks.some(w=>!w||typeof w.skill!=='string'||!w.skill.trim()||!Number.isInteger(w.minutes)||w.minutes<1||w.minutes>1440))throw Error('Invalid coaching roadmap.');
+  }
   // Keep attribute IDs safe, including older imported records with missing IDs.
   for(const key of ['skills','jobs','work','milestones']){const seen=new Set();for(const row of d[key]||[]){if(typeof row.id!=='string'||!/^[\w-]+$/.test(row.id)||seen.has(row.id))row.id=crypto.randomUUID();seen.add(row.id);}}
   const b=blank();
