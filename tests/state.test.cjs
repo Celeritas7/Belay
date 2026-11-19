@@ -11,7 +11,7 @@ function setup(store=new Map()){
   if(args.p_version!==(record?.version||0))return {error:{message:'BELAY_CONFLICT: newer data'}};
   record={data:structuredClone(args.p_data),version:(record?.version||0)+1};return {data:{version:record.version}};
  }};
- const context=vm.createContext({document:doc,window:{supabase:{createClient(){return client}},addEventListener(){}},localStorage:{getItem(k){return store.get(k)||null},setItem(k,v){store.set(k,v)},removeItem(k){store.delete(k)}},console,Intl,URL,Blob,crypto:require('node:crypto').webcrypto,structuredClone,setTimeout,clearTimeout,confirm:()=>true,navigator:{clipboard:{writeText:async()=>{}}},scrollTo(){},location:{origin:'https://example.invalid',pathname:'/'}});
+ const context=vm.createContext({document:doc,window:{supabase:{createClient(){return client}},addEventListener(){}},localStorage:{getItem(k){return store.get(k)||null},setItem(k,v){store.set(k,v)},removeItem(k){store.delete(k)}},console,Intl,URL,Blob,crypto:require('node:crypto').webcrypto,structuredClone,setTimeout,clearTimeout,confirm:()=>true,navigator:{clipboard:{writeText:async()=>{}}},scrollTo(){},location:{origin:'https://example.invalid',pathname:'/',href:'https://example.invalid/',protocol:'https:'}});
  vm.runInContext(fs.readFileSync(path.join(root,'cloud.js'),'utf8'),context);
  vm.runInContext(fs.readFileSync(path.join(root,'index.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1].replace('boot();',''),context);
  const run=s=>vm.runInContext(s,context);
@@ -217,4 +217,31 @@ test('version conflict never drops queued practice; recovery rebases on newer cl
  assert.equal(t.record().data.log.length,1);
  assert.equal(t.record().data.log[0].m,40);
  assert.equal(t.run("pendingPracticeCount('person-a')"),0);
+});
+
+test('offline readiness requires current shell files and active service worker',async()=>{
+ const t=setup();await t.ready;
+ t.run("window.caches={};caches={keys:async()=>['belay-shell-v3'],open:async()=>({match:async()=>({ok:true})})};navigator.serviceWorker={getRegistration:async()=>({active:{}})}");
+ let status=await t.run('offlineShellReport()');assert.equal(status.ready,true);assert.equal(status.files.length,7);
+ t.run("caches.open=async()=>({match:async url=>url.href.includes('cloud.js')?null:{ok:true}})");
+ status=await t.run('offlineShellReport()');assert.equal(status.ready,false);
+ assert.equal(status.files.filter(f=>!f.cached).length,1);
+ t.run("caches.open=async()=>({match:async()=>({ok:true})});navigator.serviceWorker.getRegistration=async()=>null");
+ status=await t.run('offlineShellReport()');assert.equal(status.ready,false);
+ assert.match(t.run('offlineShellCard()'),/Download readiness report/);
+ const worker=fs.readFileSync(path.join(root,'sw.js'),'utf8');
+ assert.match(worker,/belay-shell-v3/);assert.match(worker,/cloud\.js\?v=5/);
+});
+
+test('offline shell download retries missing files without removing cached files',async()=>{
+ const t=setup();await t.ready;
+ t.run("window.caches={};var storedShell=new Map();caches={keys:async()=>['belay-shell-v3'],open:async()=>({match:async url=>storedShell.get(String(url))||null,put:async (url,response)=>storedShell.set(String(url),response)})};navigator.serviceWorker={register:async()=>({}),getRegistration:async()=>({active:{}})};fetch=async url=>({ok:true,url})");
+ await t.run('prepareOfflineShell()');
+ assert.equal(t.run('storedShell.size'),7);
+ assert.equal((await t.run('offlineShellReport()')).ready,true);
+ t.run("storedShell.delete(new URL('./cloud.js?v=5',location.href).href)");
+ assert.equal((await t.run('offlineShellReport()')).ready,false);
+ await t.run('prepareOfflineShell()');
+ assert.equal((await t.run('offlineShellReport()')).ready,true);
+ assert.equal(t.run('storedShell.size'),7);
 });
