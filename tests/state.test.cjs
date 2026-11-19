@@ -3,7 +3,7 @@ const root=path.resolve(__dirname,'..');
 const ref={LV:['None','Aware','Basic','Working','Strong','Expert'],TIER:['','Entry','Mid','Senior','Lead','Manager'],COUNTRIES:[['JP','Japan',36000,24,14600,2.1]],STARTER_SKILLS:[['Test skill','Design',2]],STARTER_WANT:['Test skill'],STARTER_JOBS:[['Test job',2,100,{'Test skill':2}]],RANKS:[[0,'Apprentice'],[1000,'Engineer']],PERSONA:'Test coach',PROMPTS:{daily:'Test prompt'},BUCKETS:{},settings:{gross:5500000,fx:157,weeklyGoal:300}};
 function setup(){
  const els={},store=new Map(),listeners={};let record=null,fail=false,authCallback;
- const element=id=>els[id]??=( {innerHTML:'',textContent:'',value:'',style:{},dataset:{},classList:{add(){},remove(){},contains(){return false}},addEventListener(){},insertAdjacentHTML(){},click(){},querySelector(){return element('button')}});
+ const element=id=>els[id]??=( {innerHTML:'',textContent:'',value:'',style:{},dataset:{},setAttribute(){},removeAttribute(){},classList:{add(){},remove(){},contains(){return false}},addEventListener(){},insertAdjacentHTML(){},click(){},querySelector(){return element('button')}});
  const doc={getElementById:element,addEventListener(n,f){listeners[n]=f},querySelector:element,activeElement:{tagName:'BODY'},createElement:element};
  const client={auth:{onAuthStateChange(f){authCallback=f},async getSession(){return {data:{session:null}}},async signOut(){authCallback('SIGNED_OUT',null);return {}}},from(table){return {select(){return this},eq(){return this},async single(){return {data:{data:ref}}},async maybeSingle(){return {data:record?structuredClone(record):null}}}},async rpc(name,args){
   if(name==='belay_cost_summary')return {data:[{m:'2026-10',c:'Restaurant',s:10000,n:5}]};
@@ -140,4 +140,25 @@ test('country comparison evidence persists, labels source age, and rejects unsaf
  t.run("S.cOver.JP.asOf='2020-01-01';render()");assert.match(t.els.app.innerHTML,/Over 1 year old/);
  assert.throws(()=>t.run("normalize({...blank(),cOver:{JP:{g:36000,t:24,l:14600,i:2,source:'javascript:alert(1)'}}})"),/country assumptions/);
  assert.throws(()=>t.run("normalize({...blank(),cAI:{US:{g:-1,t:15,l:15000,i:2}}})"),/country assumptions/);
+});
+
+test('offline edits stay unsaved until reconnection, with explicit recovery warning',async()=>{
+ const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
+ t.run("navigator.onLine=false;S.log.push({d:today(),s:'Test skill',m:35});save()");
+ assert.equal(await t.run('flushSave()'),false);
+ assert.equal(t.record(),null);
+ assert.match(t.els.connectionState.textContent,/only in this open tab/);
+ assert.match(t.els.syncNotice.innerHTML,/Download my changes/);
+ t.run('navigator.onLine=true');assert.equal(await t.run('flushSave()'),true);
+ assert.equal(t.record().data.log[0].m,35);
+ assert.equal(t.run('cloud.dirty'),false);
+});
+
+test('long form has labeled dialog, scrollable body and fixed save controls',async()=>{
+ const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
+ t.run("S.jobs=[{id:'job',title:'Design engineer',tier:3,salary:6000000,req:{}}]");
+ t.click({act:'addApplication'});
+ assert.match(t.els.sheet.innerHTML,/class="form-fields"/);
+ assert.match(t.els.sheet.innerHTML,/class="form-actions row sp"/);
+ assert.match(t.els.sheet.innerHTML,/id="formTitle"/);
 });

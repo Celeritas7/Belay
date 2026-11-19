@@ -7,6 +7,8 @@ header h1{font-size:24px;letter-spacing:-.8px}
 #account{text-align:right;min-height:28px}
 #account button{min-height:32px}
 #saveState{text-align:right;font-size:12px}
+#connectionState{font-size:12px;min-height:22px;color:var(--mute)}
+#connectionState.offline{color:var(--bad);font-weight:600}
 main{padding:8px 24px 24px}
 button,input,select,textarea{min-height:44px}
 button{font-weight:500;transition:background .15s,border-color .15s}
@@ -96,7 +98,14 @@ nav:empty{display:none}
 nav button{flex:1;max-width:150px;min-height:54px;border-radius:12px;font-size:12px;gap:3px}
 nav button.on{background:var(--acc2)}
 nav button b{font-size:20px;line-height:1.1}
-#modal .sheet{padding:24px;border-radius:22px 22px 0 0;box-shadow:0 -10px 40px #0002;padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+#modal .sheet{padding:0;border-radius:22px 22px 0 0;box-shadow:0 -10px 40px #0002;max-height:min(92dvh,900px);display:flex;flex-direction:column;overflow:hidden}
+.form-heading{padding:18px 22px;border-bottom:1px solid var(--line);flex-shrink:0}
+.form-heading h2{font-size:19px;overflow-wrap:anywhere}
+.form-fields{padding:14px 22px 24px;overflow-y:auto;overscroll-behavior:contain;min-height:0;flex:1}
+.form-fields label{margin-top:14px}
+.form-fields textarea{resize:vertical}
+.form-actions{padding:14px 22px calc(14px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--card);flex-shrink:0}
+.form-actions #fx_save{min-width:120px}
 #loginForm{max-width:440px;margin:22px 0}
 .empty{text-align:center;padding:34px 22px}
 @media(min-width:760px){.hero{padding:32px}.metrics{margin:18px 0}.hero .action-row{margin-top:24px}}
@@ -107,10 +116,13 @@ nav button b{font-size:20px;line-height:1.1}
  .metrics{gap:8px}.metric{padding:12px 9px;gap:8px}.metric strong{font-size:24px}.metric small{display:block;font-size:11px;margin-top:4px}.metric>.muted{font-size:11px}.metric button{font-size:11px;padding:4px 0}.metric .bar{height:5px}
  .level-picker{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.level-picker button{min-height:64px;font-size:12px}
  .segments{gap:3px;padding:4px}.segments button{font-size:12px;padding:8px 5px}.filters span{margin-left:2px}
+ .segments[aria-label="Career sections"]{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin}
+ .segments[aria-label="Career sections"] button{flex:0 0 auto;white-space:nowrap;padding:10px 13px}
  .menu-grid,.comparison-grid{grid-template-columns:1fr}.menu-card{padding:22px 18px}.country-card{padding:22px}.comparison-diff{min-height:0}
  .job-details{padding:0}.job-details summary{padding:18px 14px;gap:8px}.detail-body{padding:0 18px 18px}
  .heat{gap:4px}.heat i{border-radius:3px}
  nav{gap:4px;padding-left:8px;padding-right:8px}nav button{font-size:11px}
+ #modal .sheet{max-height:96dvh}.form-heading{padding:12px 16px}.form-fields{padding:10px 16px 18px}.form-actions{padding-left:16px;padding-right:16px}
 }
 @media(max-width:360px){.grid2{grid-template-columns:1fr}.filters button{white-space:normal}.skill-card>.row:last-child{align-items:stretch}.skill-card>.row:last-child>.row{flex-wrap:wrap;gap:6px}}
 @media(prefers-color-scheme:dark){
