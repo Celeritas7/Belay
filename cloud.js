@@ -10,6 +10,11 @@ function normalize(value){
   for(const key of ['settings','cOver','cAI','coach'])if(d[key]!=null&&(typeof d[key]!=='object'||Array.isArray(d[key])))throw Error('Invalid '+key+'.');
   const finite=(x)=>typeof x==='number'&&Number.isFinite(x);
   const requirements=r=>r&&typeof r==='object'&&!Array.isArray(r)&&Object.entries(r).every(([n,l])=>n&&finite(l)&&l>=1&&l<=5);
+  const countryInput=v=>v&&typeof v==='object'&&!Array.isArray(v)&&['g','t','l','i'].every(k=>finite(v[k]))&&v.g>0&&v.l>0&&v.t>=0&&v.t<=100&&v.i>-100&&
+    (v.source==null||typeof v.source==='string'&&(v.source===''||/^https:\/\/[^\s]+$/i.test(v.source)))&&
+    (v.asOf==null||typeof v.asOf==='string'&&(v.asOf===''||/^\d{4}-\d{2}-\d{2}$/.test(v.asOf)&&!Number.isNaN(Date.parse(v.asOf+'T00:00:00Z'))))&&
+    (v.notes==null||typeof v.notes==='string');
+  for(const key of ['cOver','cAI'])if(Object.entries(d[key]||{}).some(([code,v])=>!/^[A-Z]{2}$/.test(code)||!countryInput(v)))throw Error('Invalid country assumptions in '+key+'.');
   if(d.skills.some(s=>!s||typeof s.name!=='string'||!s.name.trim()||!finite(s.level)||s.level<0||s.level>5))throw Error('Invalid skill name or level.');
   if(d.jobs.some(j=>!j||typeof j.title!=='string'||!requirements(j.req)||!finite(j.salary)||j.salary<0||!finite(j.tier)||j.tier<1||j.tier>5))throw Error('Invalid job profile.');
   if(d.work.some(w=>!w||typeof w.title!=='string'||(w.skills&&!Array.isArray(w.skills))))throw Error('Invalid work record.');
