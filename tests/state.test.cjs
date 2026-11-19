@@ -1,11 +1,11 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
 const root=path.resolve(__dirname,'..');
 const ref={LV:['None','Aware','Basic','Working','Strong','Expert'],TIER:['','Entry','Mid','Senior','Lead','Manager'],COUNTRIES:[['JP','Japan',36000,24,14600,2.1]],STARTER_SKILLS:[['Test skill','Design',2]],STARTER_WANT:['Test skill'],STARTER_JOBS:[['Test job',2,100,{'Test skill':2}]],RANKS:[[0,'Apprentice'],[1000,'Engineer']],PERSONA:'Test coach',PROMPTS:{daily:'Test prompt'},BUCKETS:{},settings:{gross:5500000,fx:157,weeklyGoal:300}};
-function setup(store=new Map()){
+function setup(store=new Map(),costEntries=[]){
  const els={},listeners={},storageObjects=new Map();let record=null,fail=false,authCallback;
  const element=id=>els[id]??=( {innerHTML:'',textContent:'',value:'',style:{},dataset:{},setAttribute(){},removeAttribute(){},classList:{add(){},remove(){},contains(){return false}},addEventListener(){},insertAdjacentHTML(){},click(){},querySelector(){return element('button')}});
  const doc={getElementById:element,addEventListener(n,f){listeners[n]=f},querySelector:element,activeElement:{tagName:'BODY'},createElement:element};
- const client={auth:{onAuthStateChange(f){authCallback=f},async getSession(){return {data:{session:null}}},async signOut(){authCallback('SIGNED_OUT',null);return {}}},from(table){return {select(){return this},eq(){return this},async single(){return {data:{data:ref}}},async maybeSingle(){return {data:record?structuredClone(record):null}}}},async rpc(name,args){
+ const client={auth:{onAuthStateChange(f){authCallback=f},async getSession(){return {data:{session:null}}},async signOut(){authCallback('SIGNED_OUT',null);return {}}},from(table){if(table==='cost_management_expenses'){let dates=[],owner='';return {select(){return this},eq(field,value){if(field==='user_id')owner=value;return this},in(field,values){if(field==='date')dates=values;return this},async limit(n){return {data:costEntries.filter(r=>r.user_id===owner&&dates.includes(r.date)).slice(0,n),error:fail?{message:'Simulated Cost access failure'}:null}}};}return {select(){return this},eq(){return this},async single(){return {data:{data:ref}}},async maybeSingle(){return {data:record?structuredClone(record):null}}}},async rpc(name,args){
   if(name==='belay_cost_summary')return {data:[{m:'2026-10',c:'Restaurant',s:10000,n:5}]};
   await new Promise(r=>setTimeout(r,5));if(fail)return {error:{message:'Simulated offline'}};
   if(args.p_version!==(record?.version||0))return {error:{message:'BELAY_CONFLICT: newer data'}};
@@ -226,7 +226,7 @@ test('version conflict never drops queued practice; recovery rebases on newer cl
 
 test('offline readiness requires current shell files and active service worker',async()=>{
  const t=setup();await t.ready;
- t.run("window.caches={};caches={keys:async()=>['belay-shell-v7'],open:async()=>({match:async()=>({ok:true})})};navigator.serviceWorker={getRegistration:async()=>({active:{}})}");
+ t.run("window.caches={};caches={keys:async()=>['belay-shell-v8'],open:async()=>({match:async()=>({ok:true})})};navigator.serviceWorker={getRegistration:async()=>({active:{}})}");
  let status=await t.run('offlineShellReport()');assert.equal(status.ready,true);assert.equal(status.files.length,7);
  t.run("caches.open=async()=>({match:async url=>url.href.includes('cloud.js')?null:{ok:true}})");
  status=await t.run('offlineShellReport()');assert.equal(status.ready,false);
@@ -235,16 +235,16 @@ test('offline readiness requires current shell files and active service worker',
  status=await t.run('offlineShellReport()');assert.equal(status.ready,false);
  assert.match(t.run('offlineShellCard()'),/Download readiness report/);
  const worker=fs.readFileSync(path.join(root,'sw.js'),'utf8');
- assert.match(worker,/belay-shell-v7/);assert.match(worker,/cloud\.js\?v=9/);
+ assert.match(worker,/belay-shell-v8/);assert.match(worker,/cloud\.js\?v=10/);
 });
 
 test('offline shell download retries missing files without removing cached files',async()=>{
  const t=setup();await t.ready;
- t.run("window.caches={};var storedShell=new Map();caches={keys:async()=>['belay-shell-v7'],open:async()=>({match:async url=>storedShell.get(String(url))||null,put:async (url,response)=>storedShell.set(String(url),response)})};navigator.serviceWorker={register:async()=>({}),getRegistration:async()=>({active:{}})};fetch=async url=>({ok:true,url})");
+ t.run("window.caches={};var storedShell=new Map();caches={keys:async()=>['belay-shell-v8'],open:async()=>({match:async url=>storedShell.get(String(url))||null,put:async (url,response)=>storedShell.set(String(url),response)})};navigator.serviceWorker={register:async()=>({}),getRegistration:async()=>({active:{}})};fetch=async url=>({ok:true,url})");
  await t.run('prepareOfflineShell()');
  assert.equal(t.run('storedShell.size'),7);
  assert.equal((await t.run('offlineShellReport()')).ready,true);
- t.run("storedShell.delete(new URL('./cloud.js?v=9',location.href).href)");
+ t.run("storedShell.delete(new URL('./cloud.js?v=10',location.href).href)");
  assert.equal((await t.run('offlineShellReport()')).ready,false);
  await t.run('prepareOfflineShell()');
  assert.equal((await t.run('offlineShellReport()')).ready,true);
@@ -346,4 +346,30 @@ test('renewal attention distinguishes near dates from overdue without claiming a
  assert.match(t.els.app.innerHTML,/Past recorded date · verify/);
  assert.match(t.els.app.innerHTML,/Dates are recorded expectations, not confirmation of payment/);
  assert.match(t.els.app.innerHTML,/data-act="editSubscription" data-id="due"/);
+});
+
+test('career Cost comparison is read-only, account-scoped, exact, and not persisted',async()=>{
+ const entries=[
+  {id:10,user_id:'test-user',date:'2026-11-12',amount:18000,region:'JPY',category:'Education',shop:'Exam board',expense_type:'normal'},
+  {id:11,user_id:'test-user',date:'2026-11-12',amount:18000,region:'USD',category:'Other',shop:'Other',expense_type:'normal'},
+  {id:12,user_id:'another-user',date:'2026-11-12',amount:18000,region:'JPY',category:'Private',shop:'Another user',expense_type:'normal'},
+  {id:13,user_id:'test-user',date:'2026-11-13',amount:18000,region:'JPY',category:'Other',shop:'Wrong date',expense_type:'normal'}
+ ];
+ const t=setup(new Map(),entries);await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
+ t.run("S.careerExpenses=[{id:'career1',title:'Certification',provider:'Exam board',category:'Certification / exam',date:'2026-11-12',status:'Paid',currency:'JPY',amount:18000,milestoneId:'',notes:'',updated:today()},{id:'career2',title:'Future course',provider:'Provider',category:'Course / training',date:'2026-11-12',status:'Planned',currency:'JPY',amount:18000,milestoneId:'',notes:'',updated:today()}];save();tab='careerExpenses';render()");
+ await t.run('flushSave()');
+ await t.run('checkCareerCostMatches()');
+ assert.equal(t.run('costCandidates(S.careerExpenses[0]).length'),1);
+ assert.equal(t.run('costCandidates(S.careerExpenses[1]).length'),0);
+ assert.match(t.els.app.innerHTML,/Possible Cost match/);
+ assert.match(t.els.app.innerHTML,/Cost #10 · Exam board/);
+ assert.doesNotMatch(t.els.app.innerHTML,/Another user|Wrong date/);
+ assert.equal(t.record().data.careerExpenses[0].costExpenseId,undefined);
+ assert.equal(t.record().data.costMatchRows,undefined);
+ assert.equal(t.run('S.costMatchRows'),undefined);
+ t.fail(true);await t.run('checkCareerCostMatches()');assert.match(t.els.app.innerHTML,/Cost lookup unavailable/);
+ assert.doesNotMatch(t.els.app.innerHTML,/Possible Cost match/);
+ t.fail(false);await t.run('checkCareerCostMatches()');
+ await t.run("sessionChanged({user:{id:'other-user'}})");
+ assert.equal(t.run('costCandidates({date:"2026-11-12",amount:18000,currency:"JPY",status:"Paid"}).length'),0);
 });

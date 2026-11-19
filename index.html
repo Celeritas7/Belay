@@ -95,7 +95,7 @@ nav button{padding:4px 3px}
 <div id="modal"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.js"></script>
-<script src="cloud.js?v=9"></script>
+<script src="cloud.js?v=10"></script>
 <script>
 // Reference values are supplied by belay_reference after sign-in.
 let LV=[],TIER=[],COUNTRIES=[],STARTER_SKILLS=[],STARTER_WANT=[],STARTER_JOBS=[],RANKS=[],PERSONA="",PROMPTS={},BUCKETS={},DEFAULT_SETTINGS={};
@@ -427,13 +427,37 @@ function vSubscriptions(){
 const CAREER_EXPENSE_CATEGORIES=['Course / training','Certification / exam','Books / materials','Equipment / tools','Conference / networking','Other'];
 const CAREER_EXPENSE_STATUSES=['Planned','Paid'];
 function careerExpenseTotals(rows){const totals={};for(const r of rows){const key=r.currency;totals[key]??={paid:0,planned:0};totals[key][r.status==='Paid'?'paid':'planned']+=r.amount;}return totals;}
+let costMatchBusy=false,costMatchError='',costMatchRows=null,costMatchOwner='',costMatchIncomplete=false;
+function costCandidates(expense){
+  if(costMatchOwner!==cloud.user?.id||!costMatchRows||expense.status!=='Paid')return [];
+  return costMatchRows.filter(r=>r.date===expense.date&&r.region===expense.currency&&Math.abs(r.amount-expense.amount)<0.005);
+}
+async function checkCareerCostMatches(){
+  if(costMatchBusy||!cloud.ready||!cloud.user)return;
+  const owner=cloud.user.id,epoch=cloud.epoch;
+  costMatchRows=null;costMatchOwner='';costMatchError='';costMatchIncomplete=false;
+  const dates=[...new Set((S.careerExpenses||[]).filter(r=>r.status==='Paid').map(r=>r.date))];
+  if(!dates.length){toast('Add a paid career expense before checking Cost.');render();return;}
+  if(dates.length>100){costMatchError='Too many distinct expense dates for one check. Review a smaller set before matching.';render();return;}
+  costMatchBusy=true;render();
+  try{
+    const {data,error}=await cloud.client.from('cost_management_expenses').select('id,date,amount,region,category,shop,expense_type').eq('user_id',owner).in('date',dates).limit(1001);
+    if(error)throw error;
+    if(!cloud.ready||cloud.user?.id!==owner||cloud.epoch!==epoch)return;
+    if(!Array.isArray(data))throw Error('Unexpected Cost response.');
+    costMatchRows=data.slice(0,1000).filter(r=>Number.isSafeInteger(Number(r.id))&&Number.isFinite(Number(r.amount))&&typeof r.date==='string'&&typeof r.region==='string').map(r=>({id:Number(r.id),date:r.date,amount:Number(r.amount),region:r.region,category:String(r.category||''),shop:String(r.shop||''),expense_type:String(r.expense_type||'normal')}));
+    costMatchOwner=owner;costMatchIncomplete=data.length>1000;
+  }catch(e){if(cloud.user?.id===owner)costMatchError='Cost lookup unavailable: '+e.message;}
+  finally{costMatchBusy=false;render();}
+}
 function vCareerExpenses(){
   const rows=[...(S.careerExpenses||[])].sort((a,b)=>b.date.localeCompare(a.date)||a.title.localeCompare(b.title));
   let h=pageTitle('Career investments','Keep planned learning costs separate from money you have already spent.',`<button class="pri" data-act="addCareerExpense">+ Career expense</button>`);
-  h+=`<section class="card"><h2>Career spending summary</h2><p class="muted">Manual records, not verified transactions. Totals are separated by currency and payment status. Subscriptions and Cost Management entries are not imported or counted here.</p>`;
+  h+=`<section class="card"><h2>Cost Management check</h2><p class="muted">Compare paid career expenses with transactions from your Cost ledger using exact date, amount and currency. Matching entries are only <b>possible duplicates</b>, not proof of the same payment. No Cost data is saved in Belay or modified.</p><button class="sm" data-act="checkCareerCost" ${costMatchBusy?'disabled':''}>${costMatchBusy?'Checking Cost…':'Check Cost for possible duplicates'}</button>${costMatchError?`<p class="muted">${esc(costMatchError)}</p>`:''}${costMatchOwner===cloud.user?.id&&costMatchRows?`<p class="muted">Checked ${costMatchRows.length} Cost entries in this session.${costMatchIncomplete?' Results exceeded 1,000 rows; some matches may be missing.':''} Refresh after changing a Cost record.</p>`:''}</section>`;
+  h+=`<section class="card"><h2>Career spending summary</h2><p class="muted">Manual records, not verified transactions. Totals are separated by currency and payment status. Subscriptions and Cost Management entries are not imported or counted here. Do not add these totals to Cost totals without reconciling possible duplicates.</p>`;
   const totals=careerExpenseTotals(rows);h+=Object.keys(totals).length?Object.keys(totals).sort().map(c=>`<div class="item"><b>${esc(c)}</b> · Paid ${payAmount(totals[c].paid,c)} · Planned ${payAmount(totals[c].planned,c)}</div>`).join(''):'<p class="muted">No career expenses recorded.</p>';h+='</section>';
   if(!rows.length)return h+`<section class="card empty"><h2>Start with a career investment</h2><p>For example, a certification exam or engineering course.</p><button data-act="addCareerExpense">Add expense</button></section>`;
-  return h+rows.map(r=>{const m=S.milestones.find(m=>m.id===r.milestoneId);return `<section class="card"><div class="row sp wrap"><div><h2>${esc(r.title)}</h2><p class="muted">${esc(r.date)} · ${esc(r.category)}</p></div><span class="pill ${r.status==='Paid'?'good':''}">${esc(r.status)}</span></div><p><b>${payAmount(r.amount,r.currency)}</b>${r.provider?' · '+esc(r.provider):''}</p>${m?`<p class="muted">Milestone: ${esc(m.title)}</p>`:''}${r.notes?`<p>${esc(r.notes)}</p>`:''}<button class="sm" data-act="editCareerExpense" data-id="${r.id}">Edit expense</button></section>`}).join('');
+  return h+rows.map(r=>{const m=S.milestones.find(m=>m.id===r.milestoneId),matches=costCandidates(r);return `<section class="card"><div class="row sp wrap"><div><h2>${esc(r.title)}</h2><p class="muted">${esc(r.date)} · ${esc(r.category)}</p></div><span class="pill ${r.status==='Paid'?'good':''}">${esc(r.status)}</span></div><p><b>${payAmount(r.amount,r.currency)}</b>${r.provider?' · '+esc(r.provider):''}</p>${m?`<p class="muted">Milestone: ${esc(m.title)}</p>`:''}${r.notes?`<p>${esc(r.notes)}</p>`:''}${matches.length?`<div class="item"><b>Possible Cost match${matches.length===1?'':'es'} (${matches.length})</b><p class="muted">Check the original Cost transaction before combining totals.</p>${matches.slice(0,5).map(x=>`<p class="muted">Cost #${x.id} · ${esc(x.shop||'Unknown shop')} · ${esc(x.category||'Uncategorized')}${x.expense_type==='outlier'?' · Outlier':''}</p>`).join('')}${matches.length>5?'<p class="muted">Additional matches omitted.</p>':''}</div>`:''}<button class="sm" data-act="editCareerExpense" data-id="${r.id}">Edit expense</button></section>`}).join('');
 }
 function vSalary(){
   const rows=[...(S.salaryHistory||[])].sort((a,b)=>b.month.localeCompare(a.month)||b.updated.localeCompare(a.updated));
@@ -661,6 +685,7 @@ document.addEventListener('click',e=>{
   if(a==='editSubscription')subscriptionForm(S.subscriptions.find(r=>r.id===id));
   if(a==='addCareerExpense')careerExpenseForm();
   if(a==='editCareerExpense')careerExpenseForm(S.careerExpenses.find(r=>r.id===id));
+  if(a==='checkCareerCost')checkCareerCostMatches();
   if(a==='editSalary')salaryForm(S.salaryHistory.find(r=>r.id===id));
   if(a==='uploadSalary')uploadSalaryFile(id);
   if(a==='downloadSalary')downloadSalaryFile(id);
