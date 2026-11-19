@@ -226,7 +226,7 @@ test('version conflict never drops queued practice; recovery rebases on newer cl
 
 test('offline readiness requires current shell files and active service worker',async()=>{
  const t=setup();await t.ready;
- t.run("window.caches={};caches={keys:async()=>['belay-shell-v6'],open:async()=>({match:async()=>({ok:true})})};navigator.serviceWorker={getRegistration:async()=>({active:{}})}");
+ t.run("window.caches={};caches={keys:async()=>['belay-shell-v7'],open:async()=>({match:async()=>({ok:true})})};navigator.serviceWorker={getRegistration:async()=>({active:{}})}");
  let status=await t.run('offlineShellReport()');assert.equal(status.ready,true);assert.equal(status.files.length,7);
  t.run("caches.open=async()=>({match:async url=>url.href.includes('cloud.js')?null:{ok:true}})");
  status=await t.run('offlineShellReport()');assert.equal(status.ready,false);
@@ -235,16 +235,16 @@ test('offline readiness requires current shell files and active service worker',
  status=await t.run('offlineShellReport()');assert.equal(status.ready,false);
  assert.match(t.run('offlineShellCard()'),/Download readiness report/);
  const worker=fs.readFileSync(path.join(root,'sw.js'),'utf8');
- assert.match(worker,/belay-shell-v6/);assert.match(worker,/cloud\.js\?v=8/);
+ assert.match(worker,/belay-shell-v7/);assert.match(worker,/cloud\.js\?v=9/);
 });
 
 test('offline shell download retries missing files without removing cached files',async()=>{
  const t=setup();await t.ready;
- t.run("window.caches={};var storedShell=new Map();caches={keys:async()=>['belay-shell-v6'],open:async()=>({match:async url=>storedShell.get(String(url))||null,put:async (url,response)=>storedShell.set(String(url),response)})};navigator.serviceWorker={register:async()=>({}),getRegistration:async()=>({active:{}})};fetch=async url=>({ok:true,url})");
+ t.run("window.caches={};var storedShell=new Map();caches={keys:async()=>['belay-shell-v7'],open:async()=>({match:async url=>storedShell.get(String(url))||null,put:async (url,response)=>storedShell.set(String(url),response)})};navigator.serviceWorker={register:async()=>({}),getRegistration:async()=>({active:{}})};fetch=async url=>({ok:true,url})");
  await t.run('prepareOfflineShell()');
  assert.equal(t.run('storedShell.size'),7);
  assert.equal((await t.run('offlineShellReport()')).ready,true);
- t.run("storedShell.delete(new URL('./cloud.js?v=8',location.href).href)");
+ t.run("storedShell.delete(new URL('./cloud.js?v=9',location.href).href)");
  assert.equal((await t.run('offlineShellReport()')).ready,false);
  await t.run('prepareOfflineShell()');
  assert.equal((await t.run('offlineShellReport()')).ready,true);
@@ -323,4 +323,27 @@ test('career investments separate planned and paid expenses, link milestones and
  t.run('S=blank()');await t.run('loadCloud()');assert.equal(t.run('S.careerExpenses.length'),2);
  assert.throws(()=>t.run("normalize({...blank(),careerExpenses:[{title:'Invalid',amount:-1}]})"),/career expense/);
  assert.throws(()=>t.run("normalize({...blank(),careerExpenses:[{id:'x',title:'Invalid date',provider:'X',category:'Other',date:'2026-02-30',status:'Paid',currency:'JPY',amount:1,milestoneId:'',notes:'',updated:today()}]})"),/career expense/);
+});
+
+test('salary analytics group by employer and currency, sum same-month slips and show net change',async()=>{
+ const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
+ t.run("S.salaryHistory=[{id:'a',month:'2026-01',employer:'Example',currency:'JPY',gross:500000,net:400000,notes:'',updated:today()},{id:'b',month:'2026-02',employer:'Example',currency:'JPY',gross:550000,net:430000,notes:'',updated:today()},{id:'bonus',month:'2026-02',employer:'Example',currency:'JPY',gross:100000,net:70000,notes:'Bonus',updated:today()},{id:'usd',month:'2026-02',employer:'Example',currency:'USD',gross:500,net:450,notes:'',updated:today()},{id:'other',month:'2026-01',employer:'Other employer',currency:'JPY',gross:1000,net:800,notes:'',updated:today()}];tab='salary';render()");
+ const groups=t.run('salarySeries()');assert.equal(groups.length,3);
+ assert.equal(t.run("salarySeries().find(x=>x.employer==='Example'&&x.currency==='JPY').points[1].net"),500000);
+ assert.match(t.els.app.innerHTML,/Net change 2026-01 → 2026-02/);
+ assert.match(t.els.app.innerHTML,/JPY 100,000/);
+ assert.match(t.els.app.innerHTML,/\+25\.0%/);
+ assert.match(t.els.app.innerHTML,/Gross JPY 650,000 · Net JPY 500,000/);
+ assert.doesNotMatch(t.els.app.innerHTML,/JPY 100,450/);
+});
+
+test('renewal attention distinguishes near dates from overdue without claiming a charge',async()=>{
+ const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
+ t.run("(()=>{const date=n=>{const d=new Date(today()+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};S.subscriptions=[{id:'due',name:'Due soon',provider:'P',category:'Learning',currency:'JPY',amount:1000,interval:'Monthly',nextRenewal:date(5),autoRenew:true,status:'Active',notes:'',updated:today()},{id:'over',name:'Past date',provider:'P',category:'Learning',currency:'JPY',amount:2000,interval:'Monthly',nextRenewal:date(-2),autoRenew:false,status:'Active',notes:'',updated:today()},{id:'later',name:'Later',provider:'P',category:'Learning',currency:'JPY',amount:3000,interval:'Monthly',nextRenewal:date(31),autoRenew:true,status:'Active',notes:'',updated:today()},{id:'cancel',name:'Cancelled',provider:'P',category:'Learning',currency:'JPY',amount:3000,interval:'Monthly',nextRenewal:date(2),autoRenew:true,status:'Cancelled',notes:'',updated:today()}]})()");
+ assert.equal(t.run('renewalAttention().length'),2);
+ t.run("tab='more';render()");assert.match(t.els.app.innerHTML,/2 subscriptions due within 30 days/);
+ t.run("tab='subscriptions';render()");assert.match(t.els.app.innerHTML,/Soon · 5 days/);
+ assert.match(t.els.app.innerHTML,/Past recorded date · verify/);
+ assert.match(t.els.app.innerHTML,/Dates are recorded expectations, not confirmation of payment/);
+ assert.match(t.els.app.innerHTML,/data-act="editSubscription" data-id="due"/);
 });
