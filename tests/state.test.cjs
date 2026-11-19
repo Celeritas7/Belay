@@ -226,7 +226,7 @@ test('version conflict never drops queued practice; recovery rebases on newer cl
 
 test('offline readiness requires current shell files and active service worker',async()=>{
  const t=setup();await t.ready;
- t.run("window.caches={};caches={keys:async()=>['belay-shell-v5'],open:async()=>({match:async()=>({ok:true})})};navigator.serviceWorker={getRegistration:async()=>({active:{}})}");
+ t.run("window.caches={};caches={keys:async()=>['belay-shell-v6'],open:async()=>({match:async()=>({ok:true})})};navigator.serviceWorker={getRegistration:async()=>({active:{}})}");
  let status=await t.run('offlineShellReport()');assert.equal(status.ready,true);assert.equal(status.files.length,7);
  t.run("caches.open=async()=>({match:async url=>url.href.includes('cloud.js')?null:{ok:true}})");
  status=await t.run('offlineShellReport()');assert.equal(status.ready,false);
@@ -235,16 +235,16 @@ test('offline readiness requires current shell files and active service worker',
  status=await t.run('offlineShellReport()');assert.equal(status.ready,false);
  assert.match(t.run('offlineShellCard()'),/Download readiness report/);
  const worker=fs.readFileSync(path.join(root,'sw.js'),'utf8');
- assert.match(worker,/belay-shell-v5/);assert.match(worker,/cloud\.js\?v=7/);
+ assert.match(worker,/belay-shell-v6/);assert.match(worker,/cloud\.js\?v=8/);
 });
 
 test('offline shell download retries missing files without removing cached files',async()=>{
  const t=setup();await t.ready;
- t.run("window.caches={};var storedShell=new Map();caches={keys:async()=>['belay-shell-v5'],open:async()=>({match:async url=>storedShell.get(String(url))||null,put:async (url,response)=>storedShell.set(String(url),response)})};navigator.serviceWorker={register:async()=>({}),getRegistration:async()=>({active:{}})};fetch=async url=>({ok:true,url})");
+ t.run("window.caches={};var storedShell=new Map();caches={keys:async()=>['belay-shell-v6'],open:async()=>({match:async url=>storedShell.get(String(url))||null,put:async (url,response)=>storedShell.set(String(url),response)})};navigator.serviceWorker={register:async()=>({}),getRegistration:async()=>({active:{}})};fetch=async url=>({ok:true,url})");
  await t.run('prepareOfflineShell()');
  assert.equal(t.run('storedShell.size'),7);
  assert.equal((await t.run('offlineShellReport()')).ready,true);
- t.run("storedShell.delete(new URL('./cloud.js?v=7',location.href).href)");
+ t.run("storedShell.delete(new URL('./cloud.js?v=8',location.href).href)");
  assert.equal((await t.run('offlineShellReport()')).ready,false);
  await t.run('prepareOfflineShell()');
  assert.equal((await t.run('offlineShellReport()')).ready,true);
@@ -302,4 +302,25 @@ test('subscriptions save, reload, sort renewals, and keep currency totals separa
  t.click({act:'editSubscription',id:'usd'});t.run("document.getElementById('f_amount').value='45'");t.els.fx_save.onclick();await t.run('flushSave()');assert.equal(t.record().data.subscriptions.find(s=>s.id==='usd').amount,45);
  assert.throws(()=>t.run("normalize({...blank(),subscriptions:[{name:'Invalid',amount:-1}]})"),/subscription/);
  assert.throws(()=>t.run("normalize({...blank(),subscriptions:[{id:'s',name:'X',provider:'P',category:'Software',currency:'JPY',amount:10,interval:'Monthly',nextRenewal:'2026-02-30',autoRenew:true,status:'Active',notes:'',updated:today()}]})"),/subscription/);
+});
+
+test('career investments separate planned and paid expenses, link milestones and reload',async()=>{
+ const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
+ assert.equal(t.run('S.careerExpenses.length'),0);
+ t.run("S.milestones=[{id:'cert',title:'Pass CAD certification',done:false,notes:''}];tab='careerExpenses';render()");
+ assert.match(t.els.app.innerHTML,/No career expenses recorded/);
+ t.click({act:'addCareerExpense'});
+ t.run("document.getElementById('f_title').value='CAD certification exam';document.getElementById('f_provider').value='Test institute';document.getElementById('f_category').value='Certification / exam';document.getElementById('f_date').value='2026-12-01';document.getElementById('f_status').value='Planned';document.getElementById('f_currency').value='JPY';document.getElementById('f_amount').value='18000';document.getElementById('f_milestoneId').value='cert';document.getElementById('f_notes').value='Registration planned'");
+ t.els.fx_save.onclick();await t.run('flushSave()');
+ assert.equal(t.record().data.careerExpenses[0].milestoneId,'cert');
+ assert.match(t.els.app.innerHTML,/Planned JPY 18,000/);
+ assert.match(t.els.app.innerHTML,/Milestone: Pass CAD certification/);
+ t.run("S.careerExpenses.push({id:'book',title:'Training book',provider:'Shop',category:'Books / materials',date:'2026-11-15',status:'Paid',currency:'USD',amount:20,milestoneId:'',notes:'',updated:today()});save();render()");
+ assert.match(t.els.app.innerHTML,/Paid USD 20/);
+ assert.doesNotMatch(t.els.app.innerHTML,/Paid JPY 18,000/);
+ t.click({act:'editCareerExpense',id:'book'});t.run("document.getElementById('f_amount').value='25'");t.els.fx_save.onclick();await t.run('flushSave()');
+ assert.equal(t.record().data.careerExpenses.find(r=>r.id==='book').amount,25);
+ t.run('S=blank()');await t.run('loadCloud()');assert.equal(t.run('S.careerExpenses.length'),2);
+ assert.throws(()=>t.run("normalize({...blank(),careerExpenses:[{title:'Invalid',amount:-1}]})"),/career expense/);
+ assert.throws(()=>t.run("normalize({...blank(),careerExpenses:[{id:'x',title:'Invalid date',provider:'X',category:'Other',date:'2026-02-30',status:'Paid',currency:'JPY',amount:1,milestoneId:'',notes:'',updated:today()}]})"),/career expense/);
 });
