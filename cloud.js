@@ -1,6 +1,12 @@
 /* The browser holds working data in memory. Only the auth session persists locally. */
 const cloud={client:null,user:null,ready:false,version:0,dirty:false,saving:null,error:'',conflict:false,epoch:0,change:0,timer:null,loading:false,legacy:null};
 function setSave(text){document.getElementById('saveState').textContent=text;}
+function showConnection(){
+  const el=document.getElementById('connectionState');if(!el)return;
+  const offline=navigator.onLine===false;
+  el.className=offline?'offline':'';
+  el.textContent=offline?(cloud.dirty?'Offline · unsaved changes are only in this open tab. Download a backup before closing.':'Offline · sign-in and cloud data need internet.'):(cloud.dirty?'Online · changes awaiting cloud save':'Online · cloud sync available');
+}
 function normalize(value){
   if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Expected a Belay data object.');
   const d=JSON.parse(JSON.stringify(value));
@@ -37,6 +43,7 @@ function applyReference(data){
   DEFAULT_SETTINGS=data.settings||{};
 }
 function notice(){
+  showConnection();
   const el=document.getElementById('syncNotice');
   el.innerHTML=cloud.error?`<div class="card" style="border-color:var(--bad)"><b>Changes are not saved</b><p>${esc(cloud.error)}</p><button id="retryCloud">Retry save</button> <button id="exportCloud">Download my changes</button> <button id="reloadCloud">Load cloud version</button></div>`:'';
   if(cloud.error){document.getElementById('retryCloud').onclick=()=>flushSave();document.getElementById('exportCloud').onclick=downloadState;document.getElementById('reloadCloud').onclick=()=>{if(!cloud.dirty||confirm('Discard unsaved changes and load the cloud version? Download your changes first if needed.')){cloud.dirty=false;cloud.conflict=false;cloud.error='';loadCloud();}};}
@@ -56,12 +63,13 @@ function downloadState(){
 }
 function save(){
   if(!cloud.ready)return;
-  cloud.dirty=true;cloud.change++;setSave('Unsaved changes…');clearTimeout(cloud.timer);cloud.timer=setTimeout(flushSave,500);
+  cloud.dirty=true;cloud.change++;setSave('Unsaved changes…');showConnection();clearTimeout(cloud.timer);if(navigator.onLine!==false)cloud.timer=setTimeout(flushSave,500);
 }
 async function flushSave(){
   clearTimeout(cloud.timer);
   if(cloud.saving)return cloud.saving;
   if(!cloud.ready||!cloud.dirty||cloud.conflict)return false;
+  if(navigator.onLine===false){cloud.error='Offline. Changes are in this open tab only. Download your changes, reconnect, then retry the save.';setSave('Offline · not saved');notice();return false;}
   const epoch=cloud.epoch,owner=cloud.user.id;
   cloud.saving=(async()=>{
     while(cloud.dirty&&cloud.ready&&cloud.epoch===epoch){
@@ -126,6 +134,7 @@ async function sessionChanged(session){
   if(user)await loadCloud();else{setSave('Signed out');renderGate();}
 }
 async function boot(){
+  showConnection();
   try{cloud.legacy=localStorage.getItem('careerClimb');}catch(e){}
   if(!window.supabase){cloud.error='The sign-in library could not load. Check your connection and reload.';renderGate();return;}
   cloud.client=window.supabase.createClient('https://wylxvmkcrexwfpjpbhyy.supabase.co','sb_publishable_e3pDOuxIdstaC7s0a680kQ_R10TrAyv',{auth:{storageKey:'belay-auth',persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
@@ -135,6 +144,8 @@ async function boot(){
   if(error){cloud.error=error.message;renderGate();}else await sessionChanged(data.session);
 }
 window.addEventListener('beforeunload',e=>{if(cloud.dirty){e.preventDefault();e.returnValue='';}});
-window.addEventListener('online',()=>{if(cloud.dirty)flushSave();});
+window.addEventListener('offline',()=>{showConnection();if(cloud.dirty){cloud.error='Offline. Changes are in this open tab only. Download your changes before closing.';notice();}});
+window.addEventListener('online',()=>{showConnection();if(cloud.dirty)flushSave();else if(cloud.user&&!cloud.ready&&!cloud.loading)loadCloud();});
+if('serviceWorker' in navigator&&location.protocol==='https:')window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 // Refresh when returning to the tab, but never interrupt a form or unsaved work.
 window.addEventListener('focus',()=>{if(cloud.ready&&!cloud.dirty&&!cloud.saving&&!document.getElementById('modal').classList.contains('on')&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))loadCloud();});

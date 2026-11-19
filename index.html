@@ -3,6 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#315dbe">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/belay-192.png">
 <title>Belay</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -76,11 +81,12 @@ label{display:block;font-size:12px;color:var(--mute);margin:8px 0 3px}
 .toast.big{font-size:16px;padding:14px 18px;background:linear-gradient(135deg,#14915f,#2f5bea);color:#fff;font-weight:600}
 nav button{padding:4px 3px}
 </style>
-<link rel="stylesheet" href="ui.css?v=2">
+<link rel="stylesheet" href="ui.css?v=3">
 </head>
 <body>
 <header>
   <div class="row sp"><h1>Belay</h1><span class="muted" id="saveState" role="status" aria-live="polite"></span></div>
+  <div id="connectionState" role="status" aria-live="polite"></div>
   <div id="account"></div><div id="syncNotice" role="status" aria-live="polite"></div>
   <div id="rank"></div>
 </header>
@@ -89,7 +95,7 @@ nav button{padding:4px 3px}
 <div id="modal"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.js"></script>
-<script src="cloud.js?v=2"></script>
+<script src="cloud.js?v=3"></script>
 <script>
 // Reference values are supplied by belay_reference after sign-in.
 let LV=[],TIER=[],COUNTRIES=[],STARTER_SKILLS=[],STARTER_WANT=[],STARTER_JOBS=[],RANKS=[],PERSONA="",PROMPTS={},BUCKETS={},DEFAULT_SETTINGS={};
@@ -449,9 +455,9 @@ function render(){
 // ---------- forms ----------
 function form(title,fields,vals,onSave,onDel){
   const sh=document.getElementById('sheet');
-  sh.innerHTML=`<div class="row sp"><h2 style="margin:0">${esc(title)}</h2><button class="ghost" id="fx_close">Close</button></div>`+fields.map(f=>`<label for="f_${f.k}">${esc(f.l)}</label>`+(f.t==='select'?`<select id="f_${f.k}">${f.o.map((o,i)=>`<option value="${esc(f.ov?f.ov[i]:o)}" ${String(vals[f.k])===String(f.ov?f.ov[i]:o)?'selected':''}>${esc(o)}</option>`).join('')}</select>`:f.t==='area'?`<textarea id="f_${f.k}" rows="${f.r||3}" placeholder="${esc(f.p||'')}">${esc(vals[f.k]??'')}</textarea>`:`<input id="f_${f.k}" type="${f.t||'text'}" value="${esc(vals[f.k]??'')}" placeholder="${esc(f.p||'')}">`)).join('')+`<div class="row sp" style="margin-top:14px">${onDel?'<button id="fx_del" style="color:var(--bad)">Delete</button>':'<span></span>'}<button class="pri" id="fx_save">Save</button></div>`;
-  document.getElementById('modal').classList.add('on');
-  const close=()=>document.getElementById('modal').classList.remove('on');
+  sh.innerHTML=`<div class="form-heading row sp"><h2 id="formTitle" style="margin:0">${esc(title)}</h2><button class="ghost" id="fx_close">Close</button></div><div class="form-fields">`+fields.map(f=>`<label for="f_${f.k}">${esc(f.l)}</label>`+(f.t==='select'?`<select id="f_${f.k}">${f.o.map((o,i)=>`<option value="${esc(f.ov?f.ov[i]:o)}" ${String(vals[f.k])===String(f.ov?f.ov[i]:o)?'selected':''}>${esc(o)}</option>`).join('')}</select>`:f.t==='area'?`<textarea id="f_${f.k}" rows="${f.r||3}" placeholder="${esc(f.p||'')}">${esc(vals[f.k]??'')}</textarea>`:`<input id="f_${f.k}" type="${f.t||'text'}" value="${esc(vals[f.k]??'')}" placeholder="${esc(f.p||'')}">`)).join('')+`</div><div class="form-actions row sp">${onDel?'<button id="fx_del" style="color:var(--bad)">Delete</button>':'<span></span>'}<button class="pri" id="fx_save">Save</button></div>`;
+  const modal=document.getElementById('modal');modal.classList.add('on');modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-labelledby','formTitle');
+  const close=()=>{modal.classList.remove('on');modal.removeAttribute('aria-modal');};
   document.getElementById('fx_close').onclick=close;
   document.getElementById('fx_save').onclick=()=>{const o={};fields.forEach(f=>{let v=document.getElementById('f_'+f.k).value;if(f.t==='number')v=v===''?null:+v;o[f.k]=v});if(onSave(o)!==false){close();save();render()}};
   if(onDel)document.getElementById('fx_del').onclick=()=>{if(document.getElementById('fx_del').dataset.sure){onDel();close();save();render()}else{document.getElementById('fx_del').dataset.sure=1;document.getElementById('fx_del').textContent='Tap again to delete'}};
