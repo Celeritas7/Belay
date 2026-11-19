@@ -1,7 +1,7 @@
 /* The browser holds working data in memory. Only the auth session persists locally. */
 const cloud={client:null,user:null,ready:false,version:0,dirty:false,saving:null,error:'',conflict:false,epoch:0,change:0,timer:null,loading:false,legacy:null};
 function setSave(text){document.getElementById('saveState').textContent=text;}
-const OFFLINE_SHELL='belay-shell-v8',OFFLINE_FILES=['./','./index.html','./cloud.js?v=10','./ui.css?v=3','./manifest.webmanifest','./icons/belay-192.png','./icons/belay-512.png'];
+const OFFLINE_SHELL='belay-shell-v9',OFFLINE_FILES=['./','./index.html','./cloud.js?v=11','./ui.css?v=3','./manifest.webmanifest','./icons/belay-192.png','./icons/belay-512.png'];
 let shellBusy=false;
 async function offlineShellReport(){
   const report={generatedAt:new Date().toISOString(),online:navigator.onLine!==false,serviceWorkerSupported:'serviceWorker' in navigator,cacheSupported:'caches' in window,files:[],ready:false};

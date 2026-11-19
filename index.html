@@ -95,7 +95,7 @@ nav button{padding:4px 3px}
 <div id="modal"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.js"></script>
-<script src="cloud.js?v=10"></script>
+<script src="cloud.js?v=11"></script>
 <script>
 // Reference values are supplied by belay_reference after sign-in.
 let LV=[],TIER=[],COUNTRIES=[],STARTER_SKILLS=[],STARTER_WANT=[],STARTER_JOBS=[],RANKS=[],PERSONA="",PROMPTS={},BUCKETS={},DEFAULT_SETTINGS={};
@@ -159,7 +159,7 @@ function countryEvidence(c){
   const v=S.cOver[c]||S.cAI[c]||{};
   const dated=typeof v.asOf==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v.asOf)&&!Number.isNaN(Date.parse(v.asOf+'T00:00:00Z'));
   const source=typeof v.source==='string'?v.source.trim():'';
-  const age=dated?Math.floor((Date.now()-Date.parse(v.asOf+'T00:00:00Z'))/86400000):null;
+  const age=dated?Math.floor((Date.parse(today()+'T00:00:00Z')-Date.parse(v.asOf+'T00:00:00Z'))/86400000):null;
   const documented=source&&dated&&age>=0&&age<=365;
   return {source,asOf:dated?v.asOf:'',notes:typeof v.notes==='string'?v.notes:'',label:documented?'Source recorded · check figures':source||dated?'Partial evidence':'Unverified estimate',stale:dated&&age>365};
 }
@@ -462,10 +462,11 @@ function vCareerExpenses(){
 function vSalary(){
   const rows=[...(S.salaryHistory||[])].sort((a,b)=>b.month.localeCompare(a.month)||b.updated.localeCompare(a.updated));
   let h=pageTitle('Salary history','Keep monthly pay records and private payslip files separate from job-market estimates.',`<button class="pri" data-act="addSalary">+ Salary record</button>`);
-  h+=`<section class="card"><p class="muted">Amounts are entered by you, in the original currency. Belay does not convert currencies, infer deductions, or read the contents of uploaded slips. Files are stored in a private Supabase bucket only after its security setup is applied. Do not upload until that setup has been reviewed.</p></section>`;
+  const storageReady=salaryStorageOwner===cloud.user?.id&&salaryStorageStatus==='reachable';
+  h+=`<section class="card"><h2>Private payslip storage</h2><p class="muted">Amounts are entered by you in the original currency; no conversion or slip scanning. Uploads require a private Supabase bucket with account-scoped policies. A successful connection check proves only that the bucket can be listed, not that its security policies or uploads are fully validated.</p><p class="muted" role="status">${salaryStorageChecking?'Checking…':storageReady?'Bucket reachable for this account; upload access still needs verification.':salaryStorageStatus==='unavailable'&&salaryStorageOwner===cloud.user?.id?'Storage unavailable: '+esc(salaryStorageError):'Storage not checked. Uploads are held until the check succeeds.'}</p><button class="sm" data-act="checkSalaryStorage" ${salaryStorageChecking?'disabled':''}>Check storage connection</button></section>`;
   h+=salaryAnalyticsCard();
   if(!rows.length)return h+`<section class="card empty"><h2>No salary history yet</h2><p>Start with one monthly record. You can attach its PDF or image payslip after saving the record.</p><button data-act="addSalary">Add month</button></section>`;
-  return h+rows.map(r=>`<section class="card"><div class="row sp wrap"><div><h2>${esc(r.month)} · ${esc(r.employer)}</h2><p class="muted">Gross ${payAmount(r.gross,r.currency)} · Net ${payAmount(r.net,r.currency)}</p></div><button class="sm" data-act="editSalary" data-id="${r.id}">Edit</button></div>${r.notes?`<p>${esc(r.notes)}</p>`:''}${r.filePath?`<div class="row wrap"><span class="tag">Private slip: ${esc(r.fileName)}</span><button class="sm" data-act="downloadSalary" data-id="${r.id}">Download slip</button><button class="sm ghost" data-act="removeSalaryFile" data-id="${r.id}">Remove attachment</button></div>`:`<div><label for="salaryFile_${r.id}">Attach PDF or image (maximum 10 MB)</label><input id="salaryFile_${r.id}" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,application/pdf,image/png,image/jpeg,image/webp,image/heic"><button class="sm" data-act="uploadSalary" data-id="${r.id}">Upload private slip</button></div>`}</section>`).join('');
+  return h+rows.map(r=>`<section class="card"><div class="row sp wrap"><div><h2>${esc(r.month)} · ${esc(r.employer)}</h2><p class="muted">Gross ${payAmount(r.gross,r.currency)} · Net ${payAmount(r.net,r.currency)}</p></div><button class="sm" data-act="editSalary" data-id="${r.id}">Edit</button></div>${r.notes?`<p>${esc(r.notes)}</p>`:''}${r.filePath?`<div class="row wrap"><span class="tag">Private slip: ${esc(r.fileName)}</span><button class="sm" data-act="downloadSalary" data-id="${r.id}">Download slip</button><button class="sm ghost" data-act="removeSalaryFile" data-id="${r.id}">Remove attachment</button></div>`:`<div><label for="salaryFile_${r.id}">Attach PDF or image (maximum 10 MB)</label><input id="salaryFile_${r.id}" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,application/pdf,image/png,image/jpeg,image/webp,image/heic"><button class="sm" data-act="uploadSalary" data-id="${r.id}" ${storageReady?'':'disabled'}>Upload private slip</button></div>`}</section>`).join('');
 }
 function salarySeries(){
   const groups=new Map();for(const r of S.salaryHistory||[]){const key=JSON.stringify([r.employer.trim().toLocaleLowerCase(),r.currency]);if(!groups.has(key))groups.set(key,{employer:r.employer,currency:r.currency,months:new Map()});const g=groups.get(key),m=g.months.get(r.month)||{month:r.month,gross:0,net:0};m.gross+=r.gross;m.net+=r.net;g.months.set(r.month,m);}
@@ -587,6 +588,18 @@ function careerExpenseForm(entry){
 }
 const SALARY_BUCKET='belay_salary_slips';
 let salaryBusy=false;
+let salaryStorageOwner='',salaryStorageStatus='unchecked',salaryStorageError='',salaryStorageChecking=false;
+async function checkSalaryStorage(){
+  if(salaryStorageChecking||!cloud.ready||!cloud.user)return false;
+  const owner=cloud.user.id,epoch=cloud.epoch;salaryStorageChecking=true;salaryStorageOwner=owner;salaryStorageStatus='unchecked';salaryStorageError='';render();
+  try{
+    const {error}=await cloud.client.storage.from(SALARY_BUCKET).list(owner,{limit:1});
+    if(!cloud.ready||cloud.user?.id!==owner||cloud.epoch!==epoch)return false;
+    if(error)throw error;
+    salaryStorageStatus='reachable';return true;
+  }catch(e){if(cloud.user?.id===owner){salaryStorageStatus='unavailable';salaryStorageError='Connection or permission check failed. Ask the administrator to verify bucket setup.';}return false;}
+  finally{salaryStorageChecking=false;render();}
+}
 function salaryFileInfo(file){
   if(!file||!file.name||!Number.isFinite(file.size)||file.size<1||file.size>10*1024*1024)throw Error('Choose a nonempty PDF or image under 10 MB.');
   const ext=String(file.name).split('.').pop().toLowerCase(),types={pdf:'application/pdf',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',heic:'image/heic'};
@@ -595,6 +608,7 @@ function salaryFileInfo(file){
 }
 async function uploadSalaryFile(id){
   if(salaryBusy||!cloud.ready||!cloud.user)return;
+  if(salaryStorageOwner!==cloud.user.id||salaryStorageStatus!=='reachable'){toast('Check the private storage connection before uploading.');return;}
   const row=S.salaryHistory.find(r=>r.id===id);if(!row||row.filePath)return;
   const input=document.getElementById('salaryFile_'+id),file=input?.files?.[0];
   let info;try{info=salaryFileInfo(file)}catch(e){toast(e.message);return;}
@@ -688,6 +702,7 @@ document.addEventListener('click',e=>{
   if(a==='checkCareerCost')checkCareerCostMatches();
   if(a==='editSalary')salaryForm(S.salaryHistory.find(r=>r.id===id));
   if(a==='uploadSalary')uploadSalaryFile(id);
+  if(a==='checkSalaryStorage')checkSalaryStorage();
   if(a==='downloadSalary')downloadSalaryFile(id);
   if(a==='removeSalaryFile')removeSalaryFile(id);
   if(a==='editApplication')applicationForm(S.applications.find(x=>x.id===id));
