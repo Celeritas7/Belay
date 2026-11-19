@@ -64,3 +64,22 @@ test('country shortlist persists, excludes duplicates and compares monthly yen',
  t.run("S.settings.compareCountries=['JP','removed'];render()");assert.equal(t.run("selectedCountries().join(',')"),',');
  t.run("S.settings.compareCountries={invalid:true};render()");assert.equal(t.run('selectedCountries().length'),2);
 });
+
+test('custom practice rejects invalid minutes before persisting',async()=>{
+ const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
+ t.run("S.skills=[{id:'s',name:'Test skill',level:1}]");
+ t.click({act:'practiceCustom',s:'Test skill'});
+ for(const bad of [-10,0,1.5,1441]){
+  t.run(`document.getElementById('f_m').value='${bad}'`);t.els.fx_save.onclick();
+  assert.equal(t.run('S.log.length'),0);
+ }
+ t.run("document.getElementById('f_m').value='45'");t.els.fx_save.onclick();await t.run('flushSave()');
+ assert.equal(t.record().data.log[0].m,45);
+});
+
+test('date keys and streak use local calendar dates',async()=>{
+ const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
+ assert.equal(t.run('dateKey(new Date(2026,10,20,0,30))'),'2026-11-20');
+ t.run("S.log=[{s:'Test skill',d:today(),m:30}]");
+ assert.equal(t.run('streak()'),1);
+});

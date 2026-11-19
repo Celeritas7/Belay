@@ -45,6 +45,8 @@ The Coach and country-estimate screens provide prompts and accept pasted answers
 
 `tests/cloud.test.cjs` contains a Playwright test with simulated HTTP responses and the real pinned Supabase client. Set `BELAY_SDK` to a local copy of `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.js`; install Playwright and Chromium as needed. The development executor could not launch Chromium due to its socket permissions, so this test was not run successfully there.
 
+Phase 0 validation: `node --test tests/state.test.cjs` also covers rejection of invalid custom practice minutes and local-calendar date/streak calculations. Run the suite with `TZ=Asia/Tokyo` as a regression check for Japan. Practice entries accept whole minutes from 1 to 1440, and the date for a new entry follows the device's local calendar day. Live Google OAuth and authenticated Supabase access still require an end-to-end check in a supported browser; simulated tests do not verify production configuration.
+
 Database integration was checked in a rolled-back transaction: authenticated create/update, stale-version rejection, reference reads, Cost summary and cross-account isolation. No test user or personal record was retained.
 
 `db/schema.sql` records the initial schema applied to the project. Do not reapply it blindly to an existing installation. Existing applications and authentication settings were not modified.
