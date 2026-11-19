@@ -11,6 +11,7 @@ Live app: https://celeritas7.github.io/Belay/
 - **Career** holds a selectable target job, top skill gaps, expandable job profiles and work records.
 - **Career → Milestones** tracks dated career goals, optional target-job links, notes and completion. The Skills screen lists linked work achievements as evidence when their skill tags match.
 - **More** contains Coach, country comparisons and Settings & data. Account, migration and backup controls are in Settings; save status and recovery remain visible on every screen.
+- **Coach** can now build a four-week practice roadmap from the selected target job's skill gaps and wanted skills. Each week focuses on one skill and targets 120 minutes; progress comes from practice sessions logged during that calendar week. Regenerating replaces the plan only after confirmation and never deletes practice history. The original AI copy/paste coaching remains available.
 - Country comparisons show Japan plus up to two selected destinations in monthly yen. The full table remains expandable. Figures are estimates, not current verified quotes.
 
 Target job and country selections are saved in the existing Supabase settings JSON; no database migration is required for this UI update. Practice does not automatically change a skill level: users set their level explicitly.
@@ -40,6 +41,8 @@ App records are held in memory while open and persisted in Supabase. Only the si
 Use the app forms or authenticated account JSON import. Administrators can update the appropriate `belay_state.data` JSON fields directly; the update trigger advances `version`. Refresh Belay to load database edits. Returning focus to the tab refreshes when no form or unsaved edits are active. Reference changes belong in `belay_reference.data`, not JavaScript.
 
 The Coach and country-estimate screens provide prompts and accept pasted answers. Automatic AI generation is not configured; there is no client AI key or dependency on the Claude artifact runtime.
+
+The Phase 2 practice roadmap is calculated locally and stored under `belay_state.data.coach.practiceRoadmap`. It needs no additional tables, remote AI service, or migration.
 
 ## Verification
 
