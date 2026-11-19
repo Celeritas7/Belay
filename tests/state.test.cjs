@@ -129,3 +129,15 @@ test('job applications persist posting details, skill fit and application status
  assert.equal(t.run('S.applications[0].company'),'Example Motors');
  assert.throws(()=>t.run("normalize({...blank(),applications:[{title:'Bad',status:'Unknown'}]})"),/application/);
 });
+
+test('country comparison evidence persists, labels source age, and rejects unsafe links',async()=>{
+ const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
+ t.run("S.cOver.JP={g:36000,t:24,l:14600,i:2.1,source:'https://example.org/figures',asOf:today(),notes:'Tokyo estimate'};tab='world';render()");
+ assert.match(t.els.app.innerHTML,/Source recorded · check figures/);
+ assert.match(t.els.app.innerHTML,/https:\/\/example.org\/figures/);
+ await t.run('save();flushSave()');t.run('S=blank()');await t.run('loadCloud()');
+ assert.equal(t.run('S.cOver.JP.notes'),'Tokyo estimate');
+ t.run("S.cOver.JP.asOf='2020-01-01';render()");assert.match(t.els.app.innerHTML,/Over 1 year old/);
+ assert.throws(()=>t.run("normalize({...blank(),cOver:{JP:{g:36000,t:24,l:14600,i:2,source:'javascript:alert(1)'}}})"),/country assumptions/);
+ assert.throws(()=>t.run("normalize({...blank(),cAI:{US:{g:-1,t:15,l:15000,i:2}}})"),/country assumptions/);
+});
