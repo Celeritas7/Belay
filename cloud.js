@@ -5,6 +5,7 @@ function normalize(value){
   if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Expected a Belay data object.');
   const d=JSON.parse(JSON.stringify(value));
   for(const key of ['skills','jobs','work','log'])if(!Array.isArray(d[key]))throw Error('Missing or invalid '+key+' array.');
+  if(d.milestones!=null&&!Array.isArray(d.milestones))throw Error('Invalid milestones array.');
   for(const key of ['settings','cOver','cAI','coach'])if(d[key]!=null&&(typeof d[key]!=='object'||Array.isArray(d[key])))throw Error('Invalid '+key+'.');
   const finite=(x)=>typeof x==='number'&&Number.isFinite(x);
   const requirements=r=>r&&typeof r==='object'&&!Array.isArray(r)&&Object.entries(r).every(([n,l])=>n&&finite(l)&&l>=1&&l<=5);
@@ -12,8 +13,9 @@ function normalize(value){
   if(d.jobs.some(j=>!j||typeof j.title!=='string'||!requirements(j.req)||!finite(j.salary)||j.salary<0||!finite(j.tier)||j.tier<1||j.tier>5))throw Error('Invalid job profile.');
   if(d.work.some(w=>!w||typeof w.title!=='string'||(w.skills&&!Array.isArray(w.skills))))throw Error('Invalid work record.');
   if(d.log.some(l=>!l||typeof l.s!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(l.d)||!finite(l.m)||l.m<0))throw Error('Invalid practice record.');
+  if((d.milestones||[]).some(m=>!m||typeof m.title!=='string'||!m.title.trim()||typeof m.done!=='boolean'||(m.jobId!=null&&typeof m.jobId!=='string')||(m.due&&!/^\d{4}-\d{2}-\d{2}$/.test(m.due))||(m.notes!=null&&typeof m.notes!=='string')))throw Error('Invalid career milestone.');
   // Keep attribute IDs safe, including older imported records with missing IDs.
-  for(const key of ['skills','jobs','work']){const seen=new Set();for(const row of d[key]){if(typeof row.id!=='string'||!/^[\w-]+$/.test(row.id)||seen.has(row.id))row.id=crypto.randomUUID();seen.add(row.id);}}
+  for(const key of ['skills','jobs','work','milestones']){const seen=new Set();for(const row of d[key]||[]){if(typeof row.id!=='string'||!/^[\w-]+$/.test(row.id)||seen.has(row.id))row.id=crypto.randomUUID();seen.add(row.id);}}
   const b=blank();
   return {...b,...d,settings:{...b.settings,...d.settings},cOver:d.cOver||{},cAI:d.cAI||{},coach:d.coach||{}};
 }

@@ -9,6 +9,7 @@ Live app: https://celeritas7.github.io/Belay/
 - **Overview** highlights one practice action, weekly minutes, target readiness and practice history.
 - **Skills** has labelled level buttons and All / Want to learn / Needs practice filters. Needs practice means a wanted skill with no session in the last 14 days.
 - **Career** holds a selectable target job, top skill gaps, expandable job profiles and work records.
+- **Career → Milestones** tracks dated career goals, optional target-job links, notes and completion. The Skills screen lists linked work achievements as evidence when their skill tags match.
 - **More** contains Coach, country comparisons and Settings & data. Account, migration and backup controls are in Settings; save status and recovery remain visible on every screen.
 - Country comparisons show Japan plus up to two selected destinations in monthly yen. The full table remains expandable. Figures are estimates, not current verified quotes.
 
@@ -20,6 +21,7 @@ Target job and country selections are saved in the existing Supabase settings JS
 - `ui.css`: responsive layout and accessible touch controls.
 - `cloud.js`: Supabase sign-in, loading, saving, migration and conflict handling.
 - `public.belay_state`: one private JSON document per authenticated user. Its `data` contains `skills`, `jobs`, `work`, `log`, `settings`, `cOver`, `cAI`, `coach`, and optional Cost summaries. Versioned atomic saves prevent stale overwrites.
+- Phase 1 adds an optional `milestones` array to that existing private JSON record; no database schema change or separate table is needed. Old records load with an empty milestone list.
 - `public.belay_reference`: shared reference configuration (`id = 'default'`). Country figures, example skills/jobs, rank definitions, coaching prompts, labels and default settings are loaded from here. They are not bundled in the frontend. The initial figures were migrated as estimates, not freshly verified.
 - `public.belay_cost_summary()`: reads the signed-in user's yen expenses using existing Cost RLS; never writes Cost records.
 

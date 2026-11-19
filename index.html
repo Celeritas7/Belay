@@ -104,7 +104,7 @@ let LV=[],TIER=[],COUNTRIES=[],STARTER_SKILLS=[],STARTER_WANT=[],STARTER_JOBS=[]
 const uid=()=>Math.random().toString(36).slice(2,10);
 const dateKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const today=()=>dateKey(new Date());
-const blank=()=>({skills:[],work:[],jobs:[],log:[],settings:{...DEFAULT_SETTINGS},cOver:{},cAI:{},coach:{}});
+const blank=()=>({skills:[],work:[],jobs:[],log:[],milestones:[],settings:{...DEFAULT_SETTINGS},cOver:{},cAI:{},coach:{}});
 let S=blank(), tab="home", sortC="surplus", loaded=false;
 
 // ---------- logic ----------
@@ -294,11 +294,12 @@ function costCard(){
 // ---------- views ----------
 let skillFilter='all',countryTableOpen=false;
 const targetJob=()=>S.jobs.find(j=>j.id===S.settings.targetJobId)||null;
+const skillEvidence=name=>S.work.filter(w=>(w.skills||[]).some(n=>n.toLowerCase()===name.toLowerCase()));
 const needsPractice=s=>{const d=lastPractice(s.name);return s.want&&(!d||Date.now()-new Date(d).getTime()>14*864e5)};
 function pageTitle(title,desc,action=''){return `<div class="page-title"><div><h2>${title}</h2><p class="muted">${desc}</p></div>${action}</div>`}
-function careerTabs(){return `<div class="segments" aria-label="Career sections"><button data-tab="jobs" class="${tab==='jobs'?'selected':''}">Job goals</button><button data-tab="work" class="${tab==='work'?'selected':''}">Work record</button></div>`}
+function careerTabs(){return `<div class="segments" aria-label="Career sections"><button data-tab="jobs" class="${tab==='jobs'?'selected':''}">Job goals</button><button data-tab="milestones" class="${tab==='milestones'?'selected':''}">Milestones</button><button data-tab="work" class="${tab==='work'?'selected':''}">Work record</button></div>`}
 function nav(){
-  const active=['jobs','work'].includes(tab)?'jobs':['more','world','coach','settings'].includes(tab)?'more':tab;
+  const active=['jobs','work','milestones'].includes(tab)?'jobs':['more','world','coach','settings'].includes(tab)?'more':tab;
   const T=[['home','⌂','Overview'],['skills','◆','Skills'],['jobs','↗','Career'],['more','☰','More']];
   document.getElementById('nav').innerHTML=T.map(([k,i,l])=>`<button class="${active===k?'on':''}" data-tab="${k}" ${active===k?'aria-current="page"':''}><b aria-hidden="true">${i}</b>${l}</button>`).join('');
 }
@@ -327,7 +328,7 @@ function vSkills(){
   const cats={};for(const s of filtered)(cats[s.cat||'Other']??=[]).push(s);
   for(const [cat,list] of Object.entries(cats)){
     h+=`<h3 class="section-label">${esc(cat)} <span class="muted">${list.length}</span></h3>`;
-    h+=list.map(s=>`<section class="card skill-card"><div class="row sp"><div><h2>${esc(s.name)}</h2><span class="muted">${hrs(s.name)} h logged · ${lastPractice(s.name)?'Last practice '+esc(lastPractice(s.name)):'No practice yet'}</span></div><button class="star ${s.want?'on':''}" aria-label="Want to learn ${esc(s.name)}" aria-pressed="${!!s.want}" data-act="want" data-id="${s.id}">${s.want?'★':'☆'}</button></div><div class="level-picker" role="group" aria-label="Level for ${esc(s.name)}">${LV.map((label,i)=>`<button class="${i===s.level?'selected':''}" aria-pressed="${i===s.level}" data-act="setLv" data-id="${s.id}" data-v="${i}"><b>${i}</b><span>${esc(label)}</span></button>`).join('')}</div><div class="row sp wrap"><button class="sm" data-act="editSkill" data-id="${s.id}">Edit skill</button><div class="row"><button class="ghost" data-act="practiceCustom" data-s="${esc(s.name)}">Custom time</button><button class="pri sm" data-act="practice" data-s="${esc(s.name)}">+30 min</button></div></div></section>`).join('');
+    h+=list.map(s=>`<section class="card skill-card"><div class="row sp"><div><h2>${esc(s.name)}</h2><span class="muted">${hrs(s.name)} h logged · ${lastPractice(s.name)?'Last practice '+esc(lastPractice(s.name)):'No practice yet'}</span></div><button class="star ${s.want?'on':''}" aria-label="Want to learn ${esc(s.name)}" aria-pressed="${!!s.want}" data-act="want" data-id="${s.id}">${s.want?'★':'☆'}</button></div><div class="level-picker" role="group" aria-label="Level for ${esc(s.name)}">${LV.map((label,i)=>`<button class="${i===s.level?'selected':''}" aria-pressed="${i===s.level}" data-act="setLv" data-id="${s.id}" data-v="${i}"><b>${i}</b><span>${esc(label)}</span></button>`).join('')}</div><div class="muted">${skillEvidence(s.name).length?`Evidence: ${skillEvidence(s.name).map(w=>esc(w.title)).join(' · ')}`:'No linked work evidence yet'}</div><div class="row sp wrap"><button class="sm" data-act="editSkill" data-id="${s.id}">Edit skill</button><div class="row"><button class="ghost" data-act="practiceCustom" data-s="${esc(s.name)}">Custom time</button><button class="pri sm" data-act="practice" data-s="${esc(s.name)}">+30 min</button></div></div></section>`).join('');
   }
   return h;
 }
@@ -344,6 +345,14 @@ function vJobs(){
  h+=`<h3 class="section-label">All job profiles <span class="muted">${js.length}</span></h3>`;
  h+=js.map(j=>{const m=match(j);return `<details class="card job-details"><summary><span><strong>${esc(j.title)}</strong><span class="muted">${esc(TIER[j.tier])} · ${man(j.salary)}/yr</span></span><span class="pill ${m.pct>=UNLOCK?'good':''}">${Math.round(m.pct*100)}% fit</span></summary><div class="detail-body"><p class="muted">${Math.round(wantPct(j)*100)}% of required skills match your interests.</p><div>${m.gaps.map(g=>`<span class="tag gap">${esc(g.n)} ${g.m} → ${g.r}</span>`).join('')}${m.have.map(g=>`<span class="tag ok">${esc(g.n)} ✓</span>`).join('')}</div>${j.notes?`<p class="muted">${esc(j.notes)}</p>`:''}<div class="row wrap action-row"><button class="pri sm" data-act="setTarget" data-id="${j.id}" ${target?.id===j.id?'disabled':''}>${target?.id===j.id?'Current target':'Make my target'}</button><button class="sm" data-act="editJob" data-id="${j.id}">Edit profile</button></div></div></details>`}).join('');
  return h;
+}
+function vMilestones(){
+  const target=targetJob(),items=[...S.milestones].sort((a,b)=>(a.done===b.done?0:a.done?1:-1)||(a.due||'9999').localeCompare(b.due||'9999'));
+  const done=items.filter(m=>m.done).length;
+  let h=pageTitle('Career milestones','Plan concrete steps towards your next role.',`<button class="pri" data-act="addMilestone">+ Milestone</button>`)+careerTabs();
+  h+=`<section class="card"><h2>${done} of ${items.length} completed</h2><div class="bar"><i style="width:${items.length?done/items.length*100:0}%"></i></div><p class="muted">${target?'Current job focus: '+esc(target.title):'Choose a target job in Job goals to connect milestones to your career path.'}</p></section>`;
+  if(!items.length)return h+`<section class="card empty"><h2>Start with one milestone</h2><p class="muted">For example, finish a certification, complete a project, or prepare a portfolio.</p><button data-act="addMilestone">Add milestone</button></section>`;
+  return h+items.map(m=>{const j=S.jobs.find(j=>j.id===m.jobId);return `<section class="card milestone-card"><div class="row sp wrap"><div><h2>${esc(m.title)}</h2><span class="muted">${m.due?'Target '+esc(m.due):'No target date'}${j?' · '+esc(j.title):''}</span></div><span class="pill ${m.done?'good':''}">${m.done?'Completed':'Planned'}</span></div>${m.notes?`<p>${esc(m.notes)}</p>`:''}<div class="row wrap"><button class="sm" data-act="toggleMilestone" data-id="${m.id}">${m.done?'Mark incomplete':'Mark completed'}</button><button class="ghost" data-act="editMilestone" data-id="${m.id}">Edit</button></div></section>`}).join('');
 }
 function vMore(){
  return pageTitle('More','Tools to support your next step.')+`<div class="menu-grid">${[['coach','✦','Coach','Save plans and advice from your AI assistant.'],['world','◎','Country comparisons','Compare earnings, living costs and money left over.'],['work','▤','Work record','Keep evidence of your projects and achievements.'],['settings','⚙','Settings & data','Account, weekly goal, migration and backups.']].map(([k,i,l,d])=>`<button class="card menu-card" data-tab="${k}"><span class="menu-icon" aria-hidden="true">${i}</span><span><strong>${l}</strong><span class="muted">${d}</span></span><span aria-hidden="true">→</span></button>`).join('')}</div>`;
@@ -389,7 +398,7 @@ function render(){
   if(!cloud.ready){renderGate();return;}
   nav();
   document.getElementById('rank').innerHTML='';
-  const v={home:vHome,coach:vCoach,skills:vSkills,jobs:vJobs,work:vWork,world:vWorld,more:vMore,settings:vSettings}[tab]();
+  const v={home:vHome,coach:vCoach,skills:vSkills,jobs:vJobs,milestones:vMilestones,work:vWork,world:vWorld,more:vMore,settings:vSettings}[tab]();
   document.getElementById('app').innerHTML=v;
   bindAccountControls();
   if(tab==='jobs')document.getElementById('targetJob').onchange=e=>{S.settings.targetJobId=e.target.value;save();render()};
@@ -418,6 +427,10 @@ function jobForm(j){
 }
 function workForm(w){
   form(w?'Edit work item':'New work item',[{k:'title',l:'What you did',p:'Designed welding fixture for truck frame'},{k:'org',l:'Company / project'},{k:'date',l:'Date',t:'date'},{k:'desc',l:'Details',t:'area'},{k:'impact',l:'Impact (numbers are best)',p:'Cut cycle time 18%'},{k:'skills',l:'Skills used (comma-separated)',p:'Creo Parametric, GD&T'}],w?{...w,skills:(w.skills||[]).join(', ')}:{date:today()},o=>{if(!o.title.trim())return false;o.skills=o.skills.split(',').map(x=>x.trim()).filter(Boolean);if(w)Object.assign(w,o);else S.work.push({id:uid(),...o})},w?()=>{S.work=S.work.filter(x=>x!==w)}:null);
+}
+function milestoneForm(m){
+  const jobs=[['','No specific job'],...S.jobs.map(j=>[j.id,j.title])];
+  form(m?'Edit milestone':'New career milestone',[{k:'title',l:'Milestone',p:'Complete a project or certification'},{k:'jobId',l:'Related job goal',t:'select',o:jobs.map(x=>x[1]),ov:jobs.map(x=>x[0])},{k:'due',l:'Target date',t:'date'},{k:'notes',l:'Notes / success criteria',t:'area'}],m?{...m}:{jobId:S.settings.targetJobId||'',due:''},o=>{if(!o.title.trim())return false;o.title=o.title.trim();o.jobId=S.jobs.some(j=>j.id===o.jobId)?o.jobId:'';o.done=m?.done||false;if(m)Object.assign(m,o);else S.milestones.push({id:uid(),...o})},m?()=>{S.milestones=S.milestones.filter(x=>x!==m)}:null);
 }
 function toast(t,big){const e=document.getElementById('toast');e.textContent=t;e.className='toast'+(big?' big':'');e.style.display='block';clearTimeout(e._t);e._t=setTimeout(()=>e.style.display='none',big?4000:2200)}
 function logPractice(s,m){
@@ -454,6 +467,9 @@ document.addEventListener('click',e=>{
   if(a==='practice'){e.stopPropagation();logPractice(t.dataset.s,30)}
   if(a==='practiceCustom'){const s=t.dataset.s;form('Log practice: '+s,[{k:'m',l:'Minutes (1–1440)',t:'number'}],{m:60},o=>{if(!Number.isInteger(o.m)||o.m<1||o.m>1440){toast('Enter 1–1440 whole minutes.');return false;}S.log.push({d:today(),s,m:o.m});toast(`+${o.m} min on ${s}`)})}
   if(a==='addJob')jobForm();
+  if(a==='addMilestone')milestoneForm();
+  if(a==='editMilestone')milestoneForm(S.milestones.find(m=>m.id===id));
+  if(a==='toggleMilestone'){const m=S.milestones.find(m=>m.id===id);if(m){m.done=!m.done;save();render();}}
   if(a==='editJob')jobForm(S.jobs.find(j=>j.id===id));
   if(a==='addWork')workForm();
   if(a==='editWork')workForm(S.work.find(w=>w.id===id));
