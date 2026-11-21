@@ -261,6 +261,7 @@ async function sessionChanged(session){
   if(user?.id===cloud.user?.id)return;
   // Session/account changes never reuse data from the previous account.
   clearTimeout(cloud.timer);cloud.epoch++;cloud.user=user;cloud.ready=false;cloud.version=0;cloud.dirty=false;cloud.conflict=false;cloud.error='';cloud.loading=false;S=blank();
+  if(typeof resetCareerCostMatches==='function')resetCareerCostMatches();
   document.getElementById('modal').classList.remove('on');
   if(user)await loadCloud();else{setSave('Signed out');renderGate();}
 }
