@@ -395,3 +395,17 @@ test('payslip storage readiness blocks uploads until a private bucket is reachab
  await t.run("sessionChanged({user:{id:'other-user'}})");
  assert.equal(t.run("salaryStorageOwner===cloud.user.id"),false);
 });
+
+test('salary attachment deletion confirms removal and preserves the salary month',async()=>{
+ const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
+ const filePath='test-user/synthetic-slip.pdf';
+ t.storageObjects.set(filePath,{file:{name:'synthetic-slip.pdf'}});
+ t.run(`S.salaryHistory=[{id:'slip-delete',month:'2026-11',employer:'Synthetic',currency:'JPY',gross:1000,net:1000,notes:'',filePath:'test-user/synthetic-slip.pdf',fileName:'synthetic-slip.pdf',fileType:'application/pdf',fileSize:24,updated:today()}];save();tab='salary';render()`);
+ await t.run('flushSave()');
+ assert.match(t.els.app.innerHTML,/Delete attachment…/);
+ await t.run("removeSalaryFile('slip-delete')");
+ assert.equal(t.storageObjects.has(filePath),false);
+ assert.equal(t.record().data.salaryHistory.length,1);
+ assert.equal(t.record().data.salaryHistory[0].filePath,undefined);
+ assert.match(t.els.app.innerHTML,/Attach PDF or image/);
+});
