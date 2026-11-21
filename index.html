@@ -427,14 +427,19 @@ function vSubscriptions(){
 const CAREER_EXPENSE_CATEGORIES=['Course / training','Certification / exam','Books / materials','Equipment / tools','Conference / networking','Other'];
 const CAREER_EXPENSE_STATUSES=['Planned','Paid'];
 function careerExpenseTotals(rows){const totals={};for(const r of rows){const key=r.currency;totals[key]??={paid:0,planned:0};totals[key][r.status==='Paid'?'paid':'planned']+=r.amount;}return totals;}
-let costMatchBusy=false,costMatchError='',costMatchRows=null,costMatchOwner='',costMatchIncomplete=false;
+let costMatchBusy=false,costMatchError='',costMatchRows=null,costMatchOwner='',costMatchIncomplete=false,costMatchRequestId=0;
+// Invalidate cached ledger details and any pending request when the signed-in account changes.
+function resetCareerCostMatches(){
+  costMatchRequestId++;costMatchBusy=false;costMatchError='';costMatchRows=null;costMatchOwner='';costMatchIncomplete=false;
+}
 function costCandidates(expense){
-  if(costMatchOwner!==cloud.user?.id||!costMatchRows||expense.status!=='Paid')return [];
-  return costMatchRows.filter(r=>r.date===expense.date&&r.region===expense.currency&&Math.abs(r.amount-expense.amount)<0.005);
+  if(!cloud.ready||costMatchOwner!==cloud.user?.id||!costMatchRows||expense.status!=='Paid')return [];
+  // Cost stores integer amounts. Do not describe a tolerance-based near match as exact.
+  return costMatchRows.filter(r=>r.date===expense.date&&r.region===expense.currency&&r.amount===expense.amount);
 }
 async function checkCareerCostMatches(){
   if(costMatchBusy||!cloud.ready||!cloud.user)return;
-  const owner=cloud.user.id,epoch=cloud.epoch;
+  const owner=cloud.user.id,epoch=cloud.epoch,requestId=++costMatchRequestId;
   costMatchRows=null;costMatchOwner='';costMatchError='';costMatchIncomplete=false;
   const dates=[...new Set((S.careerExpenses||[]).filter(r=>r.status==='Paid').map(r=>r.date))];
   if(!dates.length){toast('Add a paid career expense before checking Cost.');render();return;}
@@ -443,12 +448,12 @@ async function checkCareerCostMatches(){
   try{
     const {data,error}=await cloud.client.from('cost_management_expenses').select('id,date,amount,region,category,shop,expense_type').eq('user_id',owner).in('date',dates).limit(1001);
     if(error)throw error;
-    if(!cloud.ready||cloud.user?.id!==owner||cloud.epoch!==epoch)return;
+    if(requestId!==costMatchRequestId||!cloud.ready||cloud.user?.id!==owner||cloud.epoch!==epoch)return;
     if(!Array.isArray(data))throw Error('Unexpected Cost response.');
     costMatchRows=data.slice(0,1000).filter(r=>Number.isSafeInteger(Number(r.id))&&Number.isFinite(Number(r.amount))&&typeof r.date==='string'&&typeof r.region==='string').map(r=>({id:Number(r.id),date:r.date,amount:Number(r.amount),region:r.region,category:String(r.category||''),shop:String(r.shop||''),expense_type:String(r.expense_type||'normal')}));
     costMatchOwner=owner;costMatchIncomplete=data.length>1000;
-  }catch(e){if(cloud.user?.id===owner)costMatchError='Cost lookup unavailable: '+e.message;}
-  finally{costMatchBusy=false;render();}
+  }catch(e){if(requestId===costMatchRequestId&&cloud.user?.id===owner&&cloud.epoch===epoch)costMatchError='Cost lookup unavailable: '+e.message;}
+  finally{if(requestId===costMatchRequestId){costMatchBusy=false;render();}}
 }
 function vCareerExpenses(){
   const rows=[...(S.careerExpenses||[])].sort((a,b)=>b.date.localeCompare(a.date)||a.title.localeCompare(b.title));
