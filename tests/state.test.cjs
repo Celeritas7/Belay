@@ -376,6 +376,55 @@ test('career Cost comparison is read-only, account-scoped, exact, and not persis
  assert.equal(t.run('costCandidates({date:"2026-11-12",amount:18000,currency:"JPY",status:"Paid"}).length'),0);
 });
 
+test('career Cost matching requires exact amount and cannot display another owner\'s cached ledger',async()=>{
+ const entries=[
+  {id:21,user_id:'test-user',date:'2026-11-12',amount:18000,region:'JPY',category:'Study',shop:'Synthetic A',expense_type:'normal'},
+  {id:22,user_id:'another-user',date:'2026-11-12',amount:18000,region:'JPY',category:'Private',shop:'Synthetic B',expense_type:'normal'}
+ ];
+ const t=setup(new Map(),entries);await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
+ t.run("S.careerExpenses=[{id:'cost1',title:'Test',provider:'Synthetic',category:'Other',date:'2026-11-12',status:'Paid',currency:'JPY',amount:18000,milestoneId:'',notes:'',updated:today()}];tab='careerExpenses';render()");
+ await t.run('checkCareerCostMatches()');
+ assert.equal(t.run("costCandidates(S.careerExpenses[0]).map(r=>r.id).join(',')"),'21');
+ assert.equal(t.run("costCandidates({...S.careerExpenses[0],amount:18000.004}).length"),0);
+ assert.equal(t.run("costCandidates({...S.careerExpenses[0],currency:'USD'}).length"),0);
+ assert.equal(t.run("costCandidates({...S.careerExpenses[0],date:'2026-11-13'}).length"),0);
+ assert.equal(t.run("costCandidates({...S.careerExpenses[0],status:'Planned'}).length"),0);
+ await t.run("sessionChanged({user:{id:'another-user'}})");
+ assert.equal(t.run('costMatchRows'),null);
+ assert.equal(t.run('costMatchOwner'),'');
+ assert.equal(t.run('costMatchBusy'),false);
+ assert.equal(t.run("costCandidates({date:'2026-11-12',amount:18000,currency:'JPY',status:'Paid'}).length"),0);
+});
+
+test('pending Cost lookup from previous account cannot block or overwrite next account',async()=>{
+ const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
+ t.run("S.careerExpenses=[{id:'cost1',title:'Test',provider:'Synthetic',category:'Other',date:'2026-11-12',status:'Paid',currency:'JPY',amount:18000,milestoneId:'',notes:'',updated:today()}];tab='careerExpenses';render()");
+ t.run(`{
+   const originalFrom=cloud.client.from.bind(cloud.client);
+   let resolveOld;
+   globalThis.resolveOldCost=()=>resolveOld?.({data:[{id:777,date:'2026-11-12',amount:18000,region:'JPY',shop:'Old private',category:'Test'}],error:null});
+   cloud.client.from=(table)=>{
+     const query=originalFrom(table);
+     if(table==='cost_management_expenses'){
+       const limit=query.limit.bind(query);
+       query.limit=n=>!resolveOld?new Promise(resolve=>{resolveOld=resolve}):limit(n);
+     }
+     return query;
+   };
+ }`);
+ const old=t.run('checkCareerCostMatches()');
+ assert.equal(t.run('costMatchBusy'),true);
+ await t.run("sessionChanged({user:{id:'another-user'}})");
+ assert.equal(t.run('costMatchBusy'),false);
+ t.run("S.careerExpenses=[{id:'cost2',title:'Test',provider:'Synthetic',category:'Other',date:'2026-11-12',status:'Paid',currency:'JPY',amount:18000,milestoneId:'',notes:'',updated:today()}]");
+ await t.run('checkCareerCostMatches()');
+ assert.equal(t.run('costMatchOwner'),'another-user');
+ t.run('resolveOldCost()');await old;
+ assert.equal(t.run('costMatchOwner'),'another-user');
+ assert.equal(t.run('costMatchBusy'),false);
+ assert.equal(t.run('costMatchRows.some(r=>r.id===777)'),false);
+});
+
 test('payslip storage readiness blocks uploads until a private bucket is reachable',async()=>{
  const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
  t.run("S.salaryHistory=[{id:'slip1',month:'2026-10',employer:'Example',currency:'JPY',gross:10,net:8,notes:'',updated:today()}];save();tab='salary';render()");
