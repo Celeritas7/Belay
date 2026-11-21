@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),vm=requir
 const root=path.resolve(__dirname,'..');
 const ref={LV:['None','Aware','Basic','Working','Strong','Expert'],TIER:['','Entry','Mid','Senior','Lead','Manager'],COUNTRIES:[['JP','Japan',36000,24,14600,2.1]],STARTER_SKILLS:[['Test skill','Design',2]],STARTER_WANT:['Test skill'],STARTER_JOBS:[['Test job',2,100,{'Test skill':2}]],RANKS:[[0,'Apprentice'],[1000,'Engineer']],PERSONA:'Test coach',PROMPTS:{daily:'Test prompt'},BUCKETS:{},settings:{gross:5500000,fx:157,weeklyGoal:300}};
 function setup(store=new Map(),costEntries=[]){
- const els={},listeners={},storageObjects=new Map();let record=null,fail=false,authCallback,storageAvailable=true;
+ const els={},listeners={},storageObjects=new Map();let record=null,fail=false,authCallback,storageAvailable=true,emptyRemovalResult=false;
  const element=id=>els[id]??=( {innerHTML:'',textContent:'',value:'',style:{},dataset:{},setAttribute(){},removeAttribute(){},classList:{add(){},remove(){},contains(){return false}},addEventListener(){},insertAdjacentHTML(){},click(){},querySelector(){return element('button')}});
  const doc={getElementById:element,addEventListener(n,f){listeners[n]=f},querySelector:element,activeElement:{tagName:'BODY'},createElement:element};
  const client={auth:{onAuthStateChange(f){authCallback=f},async getSession(){return {data:{session:null}}},async signOut(){authCallback('SIGNED_OUT',null);return {}}},from(table){if(table==='cost_management_expenses'){let dates=[],owner='';return {select(){return this},eq(field,value){if(field==='user_id')owner=value;return this},in(field,values){if(field==='date')dates=values;return this},async limit(n){return {data:costEntries.filter(r=>r.user_id===owner&&dates.includes(r.date)).slice(0,n),error:fail?{message:'Simulated Cost access failure'}:null}}};}return {select(){return this},eq(){return this},async single(){return {data:{data:ref}}},async maybeSingle(){return {data:record?structuredClone(record):null}}}},async rpc(name,args){
@@ -12,16 +12,16 @@ function setup(store=new Map(),costEntries=[]){
   record={data:structuredClone(args.p_data),version:(record?.version||0)+1};return {data:{version:record.version}};
  }};
  client.storage={from(bucket){assert.equal(bucket,'belay_salary_slips');return {
-  async list(prefix,opts){return storageAvailable?{data:[],error:null}:{error:{message:'Bucket unavailable'}}},
+  async list(prefix,opts){return storageAvailable?{data:[...storageObjects.keys()].filter(k=>k.startsWith(prefix+'/')&&(!opts?.search||k.slice(prefix.length+1).includes(opts.search))).map(k=>({name:k.slice(prefix.length+1)})),error:null}:{error:{message:'Bucket unavailable'}}},
   async upload(key,file,opts){if(fail)return {error:{message:'Upload unavailable'}};storageObjects.set(key,{file,opts});return {data:{path:key}}},
   async download(key){return storageObjects.has(key)?{data:storageObjects.get(key).file}:{error:{message:'File missing'}}},
-  async remove(keys){for(const key of keys)storageObjects.delete(key);return {data:keys}}
+  async remove(keys){for(const key of keys)storageObjects.delete(key);return {data:emptyRemovalResult?[]:keys,error:null}}
  }}};
  const context=vm.createContext({document:doc,window:{supabase:{createClient(){return client}},addEventListener(){}},localStorage:{getItem(k){return store.get(k)||null},setItem(k,v){store.set(k,v)},removeItem(k){store.delete(k)}},console,Intl,URL,Blob,crypto:require('node:crypto').webcrypto,structuredClone,setTimeout,clearTimeout,confirm:()=>true,navigator:{clipboard:{writeText:async()=>{}}},scrollTo(){},location:{origin:'https://example.invalid',pathname:'/',href:'https://example.invalid/',protocol:'https:'}});
  vm.runInContext(fs.readFileSync(path.join(root,'cloud.js'),'utf8'),context);
  vm.runInContext(fs.readFileSync(path.join(root,'index.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1].replace('boot();',''),context);
  const run=s=>vm.runInContext(s,context);
- return {click(dataset){listeners.click({target:{closest:()=>({dataset})},stopPropagation(){}})},run,ready:run('boot()'),els,store,storageObjects,record:()=>record,setRecord(r){record=r},fail(v){fail=v},storageAvailable(v){storageAvailable=v}};
+ return {click(dataset){listeners.click({target:{closest:()=>({dataset})},stopPropagation(){}})},run,ready:run('boot()'),els,store,storageObjects,record:()=>record,setRecord(r){record=r},fail(v){fail=v},storageAvailable(v){storageAvailable=v},emptyRemovalResult(v){emptyRemovalResult=v}};
 }
 test('database persistence, all views, cost, revision conflicts and recovery',async()=>{
  const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user',email:'test@example.invalid'}})");
@@ -408,4 +408,20 @@ test('salary attachment deletion confirms removal and preserves the salary month
  assert.equal(t.record().data.salaryHistory.length,1);
  assert.equal(t.record().data.salaryHistory[0].filePath,undefined);
  assert.match(t.els.app.innerHTML,/Attach PDF or image/);
+});
+
+test('payslip deletion clears stale metadata when Storage remove returns an empty list',async()=>{
+ const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
+ t.run(`S.salaryHistory=[{id:'stale',month:'2026-11',employer:'Synthetic',currency:'JPY',gross:1000,net:1000,notes:'',filePath:'test-user/already-missing.pdf',fileName:'already-missing.pdf',updated:today()}];save();tab='salary';render()`);
+ await t.run('flushSave()');t.emptyRemovalResult(true);
+ await t.run("removeSalaryFile('stale')");
+ assert.equal(t.record().data.salaryHistory.length,1);
+ assert.equal(t.record().data.salaryHistory[0].filePath,undefined);
+});
+test('payslip deletion refuses to unlink when file absence cannot be verified',async()=>{
+ const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
+ t.run(`S.salaryHistory=[{id:'uncertain',month:'2026-11',employer:'Synthetic',currency:'JPY',gross:1000,net:1000,notes:'',filePath:'test-user/uncertain.pdf',fileName:'uncertain.pdf',updated:today()}];save();tab='salary';render()`);
+ await t.run('flushSave()');t.storageAvailable(false);
+ await t.run("removeSalaryFile('uncertain')");
+ assert.equal(t.record().data.salaryHistory[0].filePath,'test-user/uncertain.pdf');
 });
