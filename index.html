@@ -466,7 +466,7 @@ function vSalary(){
   h+=`<section class="card"><h2>Private payslip storage</h2><p class="muted">Amounts are entered by you in the original currency; no conversion or slip scanning. Uploads require a private Supabase bucket with account-scoped policies. A successful connection check proves only that the bucket can be listed, not that its security policies or uploads are fully validated.</p><p class="muted" role="status">${salaryStorageChecking?'Checking…':storageReady?'Bucket reachable for this account; upload access still needs verification.':salaryStorageStatus==='unavailable'&&salaryStorageOwner===cloud.user?.id?'Storage unavailable: '+esc(salaryStorageError):'Storage not checked. Uploads are held until the check succeeds.'}</p><button class="sm" data-act="checkSalaryStorage" ${salaryStorageChecking?'disabled':''}>Check storage connection</button></section>`;
   h+=salaryAnalyticsCard();
   if(!rows.length)return h+`<section class="card empty"><h2>No salary history yet</h2><p>Start with one monthly record. You can attach its PDF or image payslip after saving the record.</p><button data-act="addSalary">Add month</button></section>`;
-  return h+rows.map(r=>`<section class="card"><div class="row sp wrap"><div><h2>${esc(r.month)} · ${esc(r.employer)}</h2><p class="muted">Gross ${payAmount(r.gross,r.currency)} · Net ${payAmount(r.net,r.currency)}</p></div><button class="sm" data-act="editSalary" data-id="${r.id}">Edit</button></div>${r.notes?`<p>${esc(r.notes)}</p>`:''}${r.filePath?`<div class="row wrap"><span class="tag">Private slip: ${esc(r.fileName)}</span><button class="sm" data-act="downloadSalary" data-id="${r.id}">Download slip</button><button class="sm ghost" data-act="removeSalaryFile" data-id="${r.id}">Remove attachment</button></div>`:`<div><label for="salaryFile_${r.id}">Attach PDF or image (maximum 10 MB)</label><input id="salaryFile_${r.id}" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,application/pdf,image/png,image/jpeg,image/webp,image/heic"><button class="sm" data-act="uploadSalary" data-id="${r.id}" ${storageReady?'':'disabled'}>Upload private slip</button></div>`}</section>`).join('');
+  return h+rows.map(r=>`<section class="card"><div class="row sp wrap"><div><h2>${esc(r.month)} · ${esc(r.employer)}</h2><p class="muted">Gross ${payAmount(r.gross,r.currency)} · Net ${payAmount(r.net,r.currency)}</p></div><button class="sm" data-act="editSalary" data-id="${r.id}">Edit</button></div>${r.notes?`<p>${esc(r.notes)}</p>`:''}${r.filePath?`<div class="row wrap"><span class="tag">Private slip: ${esc(r.fileName)}</span><button class="sm" data-act="downloadSalary" data-id="${r.id}">Download slip</button><button class="sm ghost" data-act="removeSalaryFile" data-id="${r.id}" title="Permanently delete attached PDF or image; salary record stays">Delete attachment…</button></div>`:`<div><label for="salaryFile_${r.id}">Attach PDF or image (maximum 10 MB)</label><input id="salaryFile_${r.id}" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,application/pdf,image/png,image/jpeg,image/webp,image/heic"><button class="sm" data-act="uploadSalary" data-id="${r.id}" ${storageReady?'':'disabled'}>Upload private slip</button></div>`}</section>`).join('');
 }
 function salarySeries(){
   const groups=new Map();for(const r of S.salaryHistory||[]){const key=JSON.stringify([r.employer.trim().toLocaleLowerCase(),r.currency]);if(!groups.has(key))groups.set(key,{employer:r.employer,currency:r.currency,months:new Map()});const g=groups.get(key),m=g.months.get(r.month)||{month:r.month,gross:0,net:0};m.gross+=r.gross;m.net+=r.net;g.months.set(r.month,m);}
@@ -632,13 +632,25 @@ async function downloadSalaryFile(id){
   }catch(e){toast('Could not download private slip: '+e.message);}
 }
 async function removeSalaryFile(id){
-  if(salaryBusy||!cloud.ready||!cloud.user||cloud.dirty)return;
-  const row=S.salaryHistory.find(r=>r.id===id);if(!row?.filePath||!row.filePath.startsWith(cloud.user.id+'/'))return;
-  if(!confirm('Permanently delete this salary slip file? The salary month record will remain. Download a copy first if needed.'))return;
+  if(salaryBusy){toast('An attachment operation is already running. Try again when it finishes.');return;}
+  if(!cloud.ready||!cloud.user){toast('Sign in and reconnect to remove a private attachment.');return;}
+  const row=S.salaryHistory.find(r=>r.id===id),owner=cloud.user.id,epoch=cloud.epoch;
+  if(!row?.filePath||!row.filePath.startsWith(owner+'/')){toast('Attachment not found for this account.');return;}
+  if(!confirm('Permanently delete this salary slip PDF or image? This cannot be undone. The salary month record will remain. Download a copy first if needed.'))return;
   salaryBusy=true;
-  try{const {error}=await cloud.client.storage.from(SALARY_BUCKET).remove([row.filePath]);if(error)throw error;
-    delete row.filePath;delete row.fileName;delete row.fileType;delete row.fileSize;row.updated=today();save();const synced=await flushSave();render();toast(synced?'Attachment removed.':'Attachment deleted, but the record is not synced. Keep this page open and retry saving.');
-  }catch(e){toast('Could not remove attachment: '+e.message);}finally{salaryBusy=false;}
+  try{
+    if(cloud.dirty&&!(await flushSave()))throw Error('Unsaved cloud changes. Save or resolve the cloud-sync warning, then retry.');
+    if(!cloud.ready||cloud.user?.id!==owner||cloud.epoch!==epoch)throw Error('Account changed during deletion. Sign in again and retry.');
+    const path=row.filePath;
+    const {data,error}=await cloud.client.storage.from(SALARY_BUCKET).remove([path]);
+    if(error)throw error;
+    if(!Array.isArray(data)||!data.length)throw Error('Storage did not confirm the file was deleted. Your attachment remains linked; retry after checking your connection.');
+    if(!cloud.ready||cloud.user?.id!==owner||cloud.epoch!==epoch)throw Error('Account changed after Storage deletion. Sign in again and refresh cloud data.');
+    delete row.filePath;delete row.fileName;delete row.fileType;delete row.fileSize;row.updated=today();save();
+    const synced=await flushSave();render();
+    toast(synced?'Attachment permanently deleted. Salary month retained.':'File deleted from Storage, but the record is not synced yet. Resolve the cloud-save warning before leaving.');
+  }catch(e){toast('Could not delete attachment: '+(e?.message||'Unknown error')+'. File details were not removed.');}
+  finally{salaryBusy=false;}
 }
 function workForm(w){
   form(w?'Edit work item':'New work item',[{k:'title',l:'What you did',p:'Designed welding fixture for truck frame'},{k:'org',l:'Company / project'},{k:'date',l:'Date',t:'date'},{k:'desc',l:'Details',t:'area'},{k:'impact',l:'Impact (numbers are best)',p:'Cut cycle time 18%'},{k:'skills',l:'Skills used (comma-separated)',p:'Creo Parametric, GD&T'}],w?{...w,skills:(w.skills||[]).join(', ')}:{date:today()},o=>{if(!o.title.trim())return false;o.skills=o.skills.split(',').map(x=>x.trim()).filter(Boolean);if(w)Object.assign(w,o);else S.work.push({id:uid(),...o})},w?()=>{S.work=S.work.filter(x=>x!==w)}:null);
