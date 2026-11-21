@@ -461,24 +461,29 @@ test('salary attachment deletion confirms removal and preserves the salary month
 
 test('payslip deletion clears stale metadata when Storage remove returns an empty list',async()=>{
  const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
- t.run(`S.salaryHistory=[{id:'stale',month:'2026-11',employer:'Synthetic',currency:'JPY',gross:1000,net:1000,notes:'',filePath:'test-user/already-missing.pdf',fileName:'already-missing.pdf',updated:today()}];save();tab='salary';render()`);
- await t.run('flushSave()');t.emptyRemovalResult(true);
+ t.run(`S.salaryHistory=[{id:'stale',month:'2026-11',employer:'Synthetic',currency:'JPY',gross:1000,net:1000,notes:'',filePath:'test-user/already-missing.pdf',fileName:'already-missing.pdf',fileType:'application/pdf',fileSize:24,updated:today()}];save();tab='salary';render()`);
+ await t.run('flushSave()');
+ assert.equal(t.record()?.data.salaryHistory[0].filePath,'test-user/already-missing.pdf');
+ t.emptyRemovalResult(true);
  await t.run("removeSalaryFile('stale')");
  assert.equal(t.record().data.salaryHistory.length,1);
  assert.equal(t.record().data.salaryHistory[0].filePath,undefined);
 });
 test('payslip deletion refuses to unlink when file absence cannot be verified',async()=>{
  const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
- t.run(`S.salaryHistory=[{id:'uncertain',month:'2026-11',employer:'Synthetic',currency:'JPY',gross:1000,net:1000,notes:'',filePath:'test-user/uncertain.pdf',fileName:'uncertain.pdf',updated:today()}];save();tab='salary';render()`);
- await t.run('flushSave()');t.storageAvailable(false);
+ t.run(`S.salaryHistory=[{id:'uncertain',month:'2026-11',employer:'Synthetic',currency:'JPY',gross:1000,net:1000,notes:'',filePath:'test-user/uncertain.pdf',fileName:'uncertain.pdf',fileType:'application/pdf',fileSize:24,updated:today()}];save();tab='salary';render()`);
+ await t.run('flushSave()');
+ assert.equal(t.record()?.data.salaryHistory[0].filePath,'test-user/uncertain.pdf');
+ t.storageAvailable(false);
  await t.run("removeSalaryFile('uncertain')");
  assert.equal(t.record().data.salaryHistory[0].filePath,'test-user/uncertain.pdf');
 });
 
 test('payslip deletion edits current salary row when cloud refresh replaces S during async storage call',async()=>{
  const t=setup();await t.ready;await t.run("sessionChanged({user:{id:'test-user'}})");
- t.run(`S.salaryHistory=[{id:'race',month:'2026-11',employer:'Synthetic',currency:'JPY',gross:1000,net:1000,notes:'',filePath:'test-user/stale-slip.pdf',fileName:'stale-slip.pdf',updated:today()}];save();tab='salary';render()`);
+ t.run(`S.salaryHistory=[{id:'race',month:'2026-11',employer:'Synthetic',currency:'JPY',gross:1000,net:1000,notes:'',filePath:'test-user/stale-slip.pdf',fileName:'stale-slip.pdf',fileType:'application/pdf',fileSize:24,updated:today()}];save();tab='salary';render()`);
  await t.run('flushSave()');
+ assert.equal(t.record()?.data.salaryHistory[0].filePath,'test-user/stale-slip.pdf');
  t.refreshOnList(true);t.emptyRemovalResult(true);
  await t.run("removeSalaryFile('race')");
  assert.equal(t.record().data.salaryHistory.length,1);
