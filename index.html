@@ -642,13 +642,20 @@ async function removeSalaryFile(id){
     if(cloud.dirty&&!(await flushSave()))throw Error('Unsaved cloud changes. Save or resolve the cloud-sync warning, then retry.');
     if(!cloud.ready||cloud.user?.id!==owner||cloud.epoch!==epoch)throw Error('Account changed during deletion. Sign in again and retry.');
     const path=row.filePath;
-    const {data,error}=await cloud.client.storage.from(SALARY_BUCKET).remove([path]);
+    const bucket=cloud.client.storage.from(SALARY_BUCKET);
+    const {error}=await bucket.remove([path]);
     if(error)throw error;
-    if(!Array.isArray(data)||!data.length)throw Error('Storage did not confirm the file was deleted. Your attachment remains linked; retry after checking your connection.');
+    // A successful Storage remove can return [] for an object already absent.
+    // Verify absence with the signed-in owner's SELECT policy before unlinking metadata.
+    const filename=path.slice(owner.length+1);
+    const {data:remaining,error:listError}=await bucket.list(owner,{search:filename,limit:100});
+    if(listError)throw Error('Could not verify whether Storage removed the file: '+listError.message);
+    if(!Array.isArray(remaining))throw Error('Storage returned an invalid verification response. Attachment stays linked.');
+    if(remaining.some(item=>item.name===filename))throw Error('The file is still present in Storage. Attachment stays linked.');
     if(!cloud.ready||cloud.user?.id!==owner||cloud.epoch!==epoch)throw Error('Account changed after Storage deletion. Sign in again and refresh cloud data.');
     delete row.filePath;delete row.fileName;delete row.fileType;delete row.fileSize;row.updated=today();save();
     const synced=await flushSave();render();
-    toast(synced?'Attachment permanently deleted. Salary month retained.':'File deleted from Storage, but the record is not synced yet. Resolve the cloud-save warning before leaving.');
+    toast(synced?'Attachment cleared after verifying the private file is absent. Salary month retained.':'File absence verified, but the attachment record is not synced yet. Resolve the cloud-save warning before leaving.');
   }catch(e){toast('Could not delete attachment: '+(e?.message||'Unknown error')+'. File details were not removed.');}
   finally{salaryBusy=false;}
 }
