@@ -653,7 +653,11 @@ async function removeSalaryFile(id){
     if(!Array.isArray(remaining))throw Error('Storage returned an invalid verification response. Attachment stays linked.');
     if(remaining.some(item=>item.name===filename))throw Error('The file is still present in Storage. Attachment stays linked.');
     if(!cloud.ready||cloud.user?.id!==owner||cloud.epoch!==epoch)throw Error('Account changed after Storage deletion. Sign in again and refresh cloud data.');
-    delete row.filePath;delete row.fileName;delete row.fileType;delete row.fileSize;row.updated=today();save();
+    // Cloud refreshes replace S while async Storage calls are in progress.
+    // Always edit the current salary row, never the captured pre-await object.
+    const current=S.salaryHistory.find(r=>r.id===id);
+    if(!current||current.filePath!==path)throw Error('The salary record changed during deletion. Refresh and review it before retrying.');
+    delete current.filePath;delete current.fileName;delete current.fileType;delete current.fileSize;current.updated=today();save();
     const synced=await flushSave();render();
     toast(synced?'Attachment cleared after verifying the private file is absent. Salary month retained.':'File absence verified, but the attachment record is not synced yet. Resolve the cloud-save warning before leaving.');
   }catch(e){toast('Could not delete attachment: '+(e?.message||'Unknown error')+'. File details were not removed.');}
